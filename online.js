@@ -193,6 +193,18 @@
       this.renderParticipants();
     },
 
+    upsertParticipant(player) {
+      const normalized = this.normalizeParticipant(player, this.participants.length);
+      if (!normalized) return;
+      const existingIndex = this.participants.findIndex((item) => item.id === normalized.id || item.name === normalized.name);
+      if (existingIndex >= 0) {
+        this.participants[existingIndex] = { ...this.participants[existingIndex], ...normalized };
+      } else {
+        this.participants.push(normalized);
+      }
+      this.renderParticipants();
+    },
+
     normalizeParticipant(raw, index) {
       if (!raw || typeof raw !== "object") return null;
       const name = raw.name || raw.nickname || raw.user_name || raw.userName || raw.nick_name || raw.player_name || `Player${index + 1}`;
@@ -255,6 +267,10 @@
         });
         conn.on("close", () => {
           this.conns = this.conns.filter((item) => item !== conn);
+          if (conn._playerName) {
+            this.participants = this.participants.filter((item) => item.name !== conn._playerName && item.id !== conn.peer);
+            this.renderParticipants();
+          }
           this.refreshStatus(`${conn._playerName || "プレイヤー"}が退出しました`);
         });
         conn.on("error", () => {
@@ -304,6 +320,12 @@
     handleHostMessage(conn, msg) {
       if (msg.type === "handshake") {
         conn._playerName = msg.name || "Player";
+        conn._playerIcon = msg.icon || null;
+        this.upsertParticipant({
+          id: conn.peer || conn._playerName,
+          name: conn._playerName,
+          icon: conn._playerIcon
+        });
         conn.send({ type: "state", state: this.stateForPlayer(conn._playerName) });
         conn.send({ type: "config", settings: window.TierGame.readSetupForm ? window.TierGame.readSetupForm() : {} });
         this.refreshStatus(`${conn._playerName}が入室しました`);
