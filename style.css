@@ -55,6 +55,31 @@ body[data-online="connected"] .game-setup-fields {
   display: grid;
 }
 
+.host-config-status {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(23, 107, 100, 0.1);
+  color: var(--accent-strong);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+body[data-role="host"] .host-config-status {
+  background: #fff;
+  color: var(--muted);
+}
+
+body[data-role="guest"] .game-setup-fields label,
+body[data-role="guest"] .game-setup-fields fieldset,
+body[data-role="guest"] #loadButton {
+  display: none;
+}
+
+body[data-role="guest"] .game-setup-fields .button-row {
+  grid-template-columns: 1fr;
+}
+
 .online-screen {
   display: grid;
   gap: 10px;
@@ -323,6 +348,10 @@ button:disabled {
   font-weight: 800;
 }
 
+.topbar-spacer {
+  min-height: 1px;
+}
+
 .online-badge {
   margin-top: 4px;
   color: var(--muted);
@@ -331,6 +360,11 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.online-badge:empty,
+.online-status:empty {
+  display: none;
 }
 
 .eyebrow,

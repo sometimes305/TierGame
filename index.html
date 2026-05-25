@@ -11,7 +11,7 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <button type="button" class="topbar-button" id="endGameButton">ゲーム終了</button>
+        <span class="topbar-spacer" aria-hidden="true"></span>
         <div class="title-block">
           <p class="eyebrow">Tier Sense</p>
           <h1 id="headerPhaseDisplay">セットアップ</h1>
@@ -74,6 +74,7 @@
     <template id="setupTemplate">
       <form class="stack" id="setupForm">
         <section class="game-setup-fields">
+          <div class="host-config-status" id="hostConfigStatus">ホストがルールを設定中...</div>
           <label>
             <span>お題</span>
             <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" required />

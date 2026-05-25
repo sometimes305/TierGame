@@ -19,7 +19,6 @@ let state = createInitialState();
 let applyingRemoteState = false;
 
 const els = {
-  endGame: document.querySelector("#endGameButton"),
   help: document.querySelector("#helpButton"),
   headerPhase: document.querySelector("#headerPhaseDisplay"),
   streak: document.querySelector("#streakValue"),
@@ -33,7 +32,6 @@ const els = {
   setupTemplate: document.querySelector("#setupTemplate")
 };
 
-els.endGame.addEventListener("click", resetGame);
 els.help.addEventListener("click", showHowToPlay);
 render();
 
@@ -65,6 +63,7 @@ function setTopExclusionHeight() {
 
 function render() {
   document.body.dataset.phase = state.phase;
+  document.body.dataset.role = window.TierOnline && window.TierOnline.online ? (window.TierOnline.host ? "host" : "guest") : "none";
   els.streak.textContent = state.streak;
   els.goal.textContent = state.goalStreak;
   els.round.textContent = state.round;
@@ -125,6 +124,7 @@ function renderPanel() {
     fragment.querySelector("#hintCountInput").value = state.hintCount;
     fragment.querySelector(`[name="mode"][value="${state.mode}"]`).checked = true;
     fragment.querySelector("#loadButton").disabled = !localStorage.getItem(STORAGE_KEY);
+    applySetupRoleUi(fragment);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -597,5 +597,76 @@ window.TierGame = {
         avatar.textContent = safeName.slice(0, 1) || "名";
       }
     }
+  },
+  previewSetup(nextSettings) {
+    state.topic = nextSettings.topic ?? state.topic;
+    state.goalStreak = nextSettings.goalStreak ?? state.goalStreak;
+    state.hintCount = nextSettings.hintCount ?? state.hintCount;
+    state.mode = nextSettings.mode ?? state.mode;
+    render();
+  },
+  readSetupForm() {
+    return readSetupForm(document);
+  },
+  refresh() {
+    render();
   }
 };
+
+function applySetupRoleUi(root) {
+  const isConnected = window.TierOnline && window.TierOnline.online;
+  const isHost = window.TierOnline && window.TierOnline.host;
+  const status = root.querySelector("#hostConfigStatus");
+  const startButton = root.querySelector('button[type="submit"]');
+  const topicInput = root.querySelector("#topicInput");
+  const goalInput = root.querySelector("#goalInput");
+  const hintInput = root.querySelector("#hintCountInput");
+  const modeInputs = [...root.querySelectorAll('[name="mode"]')];
+  const controls = [topicInput, goalInput, hintInput, ...modeInputs].filter(Boolean);
+
+  if (!isConnected) {
+    if (status) status.textContent = "部屋を作成または参加してください。";
+    if (startButton) startButton.disabled = true;
+    controls.forEach((control) => (control.disabled = true));
+    return;
+  }
+
+  if (isHost) {
+    if (status) status.textContent = "あなたがホストです。ルールを設定してゲームを開始できます。";
+    if (startButton) startButton.disabled = false;
+    controls.forEach((control) => (control.disabled = false));
+    controls.forEach((control) => {
+      if (control.dataset.boundConfigSync) return;
+      control.dataset.boundConfigSync = "1";
+      control.addEventListener("input", syncSetupConfig);
+      control.addEventListener("change", syncSetupConfig);
+    });
+    setTimeout(syncSetupConfig, 0);
+    return;
+  }
+
+  if (status) status.textContent = "ホストがルールを設定中です。開始までお待ちください。";
+  if (startButton) {
+    startButton.disabled = true;
+    startButton.textContent = "ホストの開始待ち";
+  }
+  controls.forEach((control) => (control.disabled = true));
+}
+
+function readSetupForm(root = document) {
+  const topicInput = root.querySelector("#topicInput");
+  const goalInput = root.querySelector("#goalInput");
+  const hintInput = root.querySelector("#hintCountInput");
+  const checkedMode = root.querySelector('[name="mode"]:checked');
+  return {
+    topic: topicInput ? topicInput.value.trim() : state.topic,
+    goalStreak: goalInput ? Number(goalInput.value) : state.goalStreak,
+    hintCount: hintInput ? Number(hintInput.value) : state.hintCount,
+    mode: checkedMode ? checkedMode.value : state.mode
+  };
+}
+
+function syncSetupConfig() {
+  if (!window.TierOnline || !window.TierOnline.isHost()) return;
+  window.TierOnline.broadcastConfig(readSetupForm());
+}

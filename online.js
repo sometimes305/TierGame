@@ -136,7 +136,7 @@
         return;
       }
       if (!this.online) {
-        message = this.isGravity ? "Gravity: 未接続" : "Gravity内で起動してください";
+        message = "";
       } else {
         message = `${this.host ? "ホスト" : "ゲスト"} / 部屋ID: ${String(this.roomId || "----").slice(-5)}`;
       }
@@ -147,6 +147,7 @@
 
     renderRoomUi() {
       document.body.dataset.online = this.online ? "connected" : "lobby";
+      document.body.dataset.role = this.online ? (this.host ? "host" : "guest") : "none";
       const panel = document.querySelector("#roomPanel");
       const roomId = document.querySelector("#activeRoomId");
       if (panel) panel.classList.toggle("hidden", !this.online);
@@ -304,6 +305,7 @@
       if (msg.type === "handshake") {
         conn._playerName = msg.name || "Player";
         conn.send({ type: "state", state: window.TierGame.exportState() });
+        conn.send({ type: "config", settings: window.TierGame.readSetupForm ? window.TierGame.readSetupForm() : {} });
         this.refreshStatus(`${conn._playerName}が入室しました`);
         return;
       }
@@ -316,6 +318,9 @@
       if (msg.type === "state" || msg.type === "rt_sync") {
         window.TierGame.importState(msg.state || msg.data || msg);
       }
+      if (msg.type === "config" && window.TierGame.previewSetup) {
+        window.TierGame.previewSetup(msg.settings || {});
+      }
     },
 
     broadcastState(state) {
@@ -324,6 +329,16 @@
         if (!conn || !conn.open) return;
         try {
           conn.send({ type: "state", state });
+        } catch {}
+      });
+    },
+
+    broadcastConfig(settings) {
+      if (!this.online || !this.host) return;
+      this.conns.forEach((conn) => {
+        if (!conn || !conn.open) return;
+        try {
+          conn.send({ type: "config", settings });
         } catch {}
       });
     },
@@ -359,6 +374,7 @@
         this.setParticipants([]);
         this.statusMessage = "";
         this.refreshStatus();
+        if (window.TierGame.refresh) window.TierGame.refresh();
       } catch (error) {
         console.warn("[TierOnline] create room failed:", error);
         this.online = false;
@@ -385,6 +401,7 @@
         this.startGuestPeer(rid);
         this.statusMessage = "";
         this.refreshStatus();
+        if (window.TierGame.refresh) window.TierGame.refresh();
       } catch (error) {
         console.warn("[TierOnline] join room failed:", error);
         this.online = false;
@@ -483,6 +500,7 @@
       this.participants = [];
       this.stopRealtime();
       this.refreshStatus("ロビーに戻りました");
+      if (window.TierGame.refresh) window.TierGame.refresh();
       this.fetchRoomList();
     },
 
@@ -561,7 +579,7 @@
 
       if (!this.isGravity) {
         window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
-        this.refreshStatus("Gravity内で起動してください");
+        this.refreshStatus("");
         return;
       }
 
