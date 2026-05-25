@@ -36,10 +36,19 @@ const els = {
   board: document.querySelector("#tierBoard"),
   panelTitle: document.querySelector("#panelTitle"),
   panelBody: document.querySelector("#panelBody"),
-  setupTemplate: document.querySelector("#setupTemplate")
+  setupTemplate: document.querySelector("#setupTemplate"),
+  chatLog: document.querySelector("#chatLog"),
+  chatForm: document.querySelector("#chatForm"),
+  chatInput: document.querySelector("#chatInput")
 };
 
 els.help.addEventListener("click", showHowToPlay);
+if (els.chatForm) {
+  els.chatForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitChat();
+  });
+}
 render();
 
 function createInitialState() {
@@ -52,12 +61,16 @@ function createInitialState() {
     goalStreak: 5,
     hintCount: 3,
     remainingHints: 3,
+    topicSetterName: "",
     answererName: "",
+    answererNames: [],
     answererIndex: 0,
     streak: 0,
     round: 1,
     currentSecretRank: "",
     currentAnswer: "",
+    currentAnswers: [],
+    chatMessages: [],
     judgedRank: "",
     selectedRank: "",
     eliminatedRanks: [],
@@ -88,6 +101,7 @@ function render() {
 
   renderBoard();
   renderPanel();
+  renderChat();
   if (window.TierOnline && window.TierOnline.bindControls) {
     window.TierOnline.bindControls();
   }
@@ -166,7 +180,7 @@ function renderPanel() {
     const canView = canCurrentPlayerViewSecret();
     const children = [
       playBar(
-        canView ? "あなたが回答者です。秘密ランクを確認してください。" : `${state.answererName || "回答者"}さんが秘密ランクを確認しています...`,
+        canView ? "あなたは回答者です。秘密ランクを確認してください。" : `${state.topicSetterName || state.answererName || "お題担当"}さん以外が秘密ランクを確認しています...`,
         [
           button(state.secretVisible ? "隠す" : "秘密を見る", () => {
             state.secretVisible = !state.secretVisible;
@@ -198,35 +212,35 @@ function renderPanel() {
     const canAnswer = canCurrentPlayerViewSecret();
     const children = [
       playBar(
-        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${state.answererName || "回答者"}さんが回答を考えています...`,
+        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${state.topicSetterName || state.answererName || "お題担当"}さん以外が回答を考えています...`,
         []
       )
     ];
     if (canAnswer) {
+      const alreadyAnswered = hasCurrentPlayerAnswered();
       const form = document.createElement("form");
       form.className = "stack";
       form.innerHTML = `
         <label>
           <span>回答単語</span>
-          <input id="answerInput" maxlength="20" placeholder="例: ワニ" required />
+          <input id="answerInput" maxlength="20" placeholder="例: ワニ" required ${alreadyAnswered ? "disabled" : ""} />
         </label>
       `;
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         const answer = form.querySelector("#answerInput").value.trim();
         if (!answer) return;
-        if (sendRemoteAction("submitAnswer", { answer })) return;
-        state.currentAnswer = answer;
-        state.phase = "discussion";
+        if (sendRemoteAction("submitAnswer", { answer, playerName: getCurrentPlayerName() })) return;
+        submitAnswer(answer, getCurrentPlayerName());
         saveGame();
         render();
       });
-      children.push(createModal("単語入力", [metaBox("狙うランク", state.currentSecretRank), form], [
+      children.push(createModal(alreadyAnswered ? "提出済み" : "単語入力", [metaBox("狙うランク", state.currentSecretRank), answersBox(), form], [
         button("戻る", () => {
           state.phase = "secret";
           render();
-        }, "ghost"),
-        button("OK", () => form.requestSubmit(), "primary")
+        }, "ghost", "button", alreadyAnswered),
+        button(alreadyAnswered ? "待機" : "OK", () => form.requestSubmit(), "primary", "button", alreadyAnswered)
       ]));
     }
     els.panelBody.append(createStack(children));
@@ -236,7 +250,7 @@ function renderPanel() {
   if (state.phase === "discussion") {
     els.panelBody.append(
       playBar(
-        `回答「${state.currentAnswer}」のランクを相談中...`,
+        `${answerSummary()} のランクを相談中...`,
         [
           button("ヒント", useHint, "ghost", "button", !canUseHint()),
           button("回答する", () => {
@@ -267,7 +281,7 @@ function renderPanel() {
       )
     ];
     if (canCurrentPlayerJudge()) {
-      children.push(createModal("回答入力", [metaBox("回答", state.currentAnswer), createRankPicker()], [
+      children.push(createModal("回答入力", [answersBox(), createRankPicker()], [
         button("キャンセル", () => {
           state.phase = "discussion";
           render();
@@ -326,7 +340,9 @@ function startGame(settings) {
   state.goalStreak = resolved.goalStreak;
   state.hintCount = resolved.hintCount;
   state.remainingHints = resolved.hintCount;
-  state.answererName = pickInitialAnswerer(resolved);
+  state.topicSetterName = pickInitialTopicSetter();
+  state.answererName = state.topicSetterName;
+  state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
   addWord(state.initialRank, state.startWord, 0);
   prepareRound();
   saveGame();
@@ -336,6 +352,8 @@ function startGame(settings) {
 function prepareRound() {
   state.currentSecretRank = pick(state.unlockedRanks);
   state.currentAnswer = "";
+  state.currentAnswers = [];
+  state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName || state.answererName);
   state.judgedRank = "";
   state.selectedRank = "";
   state.eliminatedRanks = [];
@@ -366,11 +384,13 @@ function judge(rank) {
   const success = rank === state.currentSecretRank;
   state.judgedRank = rank;
   state.streak = success ? state.streak + 1 : 0;
-  addWord(rank, state.currentAnswer, state.round);
+  const answers = getCurrentAnswers();
+  answers.forEach((answer) => addWord(rank, answer.word, state.round));
   const unlockedRanks = unlockOuterRanks(rank);
   state.lastResult = {
     success,
-    answer: state.currentAnswer,
+    answer: answers.map((answer) => answer.word).join(" / "),
+    answers,
     secretRank: state.currentSecretRank,
     judgedRank: rank,
     unlockedRanks
@@ -412,7 +432,7 @@ function unlockRank(rank) {
 function nextRound() {
   if (sendRemoteAction("nextRound")) return;
   state.round += 1;
-  rotateAnswerer();
+  rotateTopicSetter();
   prepareRound();
   saveGame();
   render();
@@ -422,7 +442,7 @@ function restartKeepingBoard() {
   if (sendRemoteAction("restartKeepingBoard")) return;
   state.streak = 0;
   state.round += 1;
-  rotateAnswerer();
+  rotateTopicSetter();
   prepareRound();
   saveGame();
   render();
@@ -451,6 +471,7 @@ function resolveSetup(settings = {}) {
     initialRank: ["A", "B", "C"].includes(initialRank) ? initialRank : "B",
     goalStreak: clamp(Number(settings.goalStreak) || 5, 1, 20),
     hintCount: clamp(Number(settings.hintCount) || 0, 0, 20),
+    topicSetterName: "",
     answererName: ""
   };
 }
@@ -465,17 +486,37 @@ function getParticipantNames() {
   return names.length ? names : ["Player"];
 }
 
-function getAnswererCandidateNames() {
+function getTopicSetterCandidateNames() {
   const names = getParticipantNames();
+  return names;
+}
+
+function getAnswererNamesForTopicSetter(topicSetterName) {
+  const names = getParticipantNames();
+  if (names.length <= 1) return names;
+  const answers = names.filter((name) => normalizeName(name) !== normalizeName(topicSetterName));
+  return answers.length ? answers : names;
+}
+
+function getActiveAnswererNames() {
+  return Array.isArray(state.answererNames) && state.answererNames.length
+    ? state.answererNames
+    : getAnswererNamesForTopicSetter(state.topicSetterName || state.answererName);
+}
+
+function pickInitialTopicSetter() {
   const online = window.TierOnline;
-  if (!online || !online.online || !online.host || names.length <= 1) return names;
-  const hostName = online.localPlayerName || (window.TierGame ? window.TierGame.getPlayerName() : "");
-  const guests = names.filter((name) => normalizeName(name) !== normalizeName(hostName));
-  return guests.length ? guests : names;
+  const hostName = online && online.online
+    ? online.localPlayerName
+    : getCurrentPlayerName();
+  const names = getTopicSetterCandidateNames();
+  const matched = names.find((name) => normalizeName(name) === normalizeName(hostName));
+  state.answererIndex = Math.max(0, names.indexOf(matched || names[0]));
+  return matched || names[0];
 }
 
 function pickInitialAnswerer(settings) {
-  const names = getAnswererCandidateNames();
+  const names = getTopicSetterCandidateNames();
   state.answererIndex = Math.floor(Math.random() * names.length);
   return names[state.answererIndex];
 }
@@ -484,7 +525,7 @@ function canStartGame() {
   const online = window.TierOnline;
   if (!online || !online.online) return true;
   if (!online.isHost()) return false;
-  return getParticipantNames().length >= 2 && getAnswererCandidateNames().length >= 1;
+  return getParticipantNames().length >= 2;
 }
 
 function startBlockedReason() {
@@ -495,13 +536,16 @@ function startBlockedReason() {
   return "";
 }
 
-function rotateAnswerer() {
-  const names = getAnswererCandidateNames();
+function rotateTopicSetter() {
+  const names = getTopicSetterCandidateNames();
   if (!names.length) return;
-  const current = names.indexOf(state.answererName);
+  const currentName = state.topicSetterName || state.answererName;
+  const current = names.findIndex((name) => normalizeName(name) === normalizeName(currentName));
   state.answererIndex = current >= 0 ? current + 1 : state.answererIndex + 1;
   state.answererIndex %= names.length;
-  state.answererName = names[state.answererIndex];
+  state.topicSetterName = names[state.answererIndex];
+  state.answererName = state.topicSetterName;
+  state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
 }
 
 function showHowToPlay() {
@@ -549,7 +593,25 @@ function normalizeLoadedState(loaded) {
   next.remainingHints = clamp(Number(next.remainingHints ?? next.hintCount) || 0, 0, next.hintCount);
   next.initialRank = ["A", "B", "C"].includes(next.initialRank) ? next.initialRank : "B";
   next.topicMode = next.topicMode === "manual" ? "manual" : "auto";
+  next.topicSetterName = String(next.topicSetterName || next.answererName || "");
   next.answererName = String(next.answererName || "");
+  next.answererNames = Array.isArray(next.answererNames) ? next.answererNames.map(String).filter(Boolean) : [];
+  next.currentAnswers = Array.isArray(next.currentAnswers) ? next.currentAnswers
+    .filter(Boolean)
+    .map((answer) => ({
+      playerName: String(answer.playerName || "Player"),
+      word: String(answer.word || "").slice(0, 20)
+    }))
+    .filter((answer) => answer.word) : [];
+  if (!next.currentAnswers.length && next.currentAnswer) {
+    next.currentAnswers = [{ playerName: next.answererName || "Player", word: String(next.currentAnswer).slice(0, 20) }];
+  }
+  next.chatMessages = Array.isArray(next.chatMessages) ? next.chatMessages.slice(-80).map((message, index) => ({
+    id: String(message.id || `${Date.now()}-${index}`),
+    playerName: String(message.playerName || "Player"),
+    text: String(message.text || "").slice(0, 120),
+    turn: Math.max(0, Number(message.turn) || 0)
+  })).filter((message) => message.text) : [];
   next.answererIndex = Math.max(0, Number(next.answererIndex) || 0);
   next.streak = Math.max(0, Number(next.streak) || 0);
   next.round = Math.max(1, Number(next.round) || 1);
@@ -565,6 +627,54 @@ function createSecretBox(canView) {
   rank.textContent = canView && state.secretVisible ? state.currentSecretRank : "回答者だけ見られます";
   box.append(rank);
   return box;
+}
+
+function getCurrentAnswers() {
+  if (Array.isArray(state.currentAnswers) && state.currentAnswers.length) {
+    return state.currentAnswers
+      .filter((answer) => answer && answer.word)
+      .map((answer) => ({
+        playerName: String(answer.playerName || "Player"),
+        word: String(answer.word || "").slice(0, 20)
+      }));
+  }
+  if (state.currentAnswer) {
+    return [{ playerName: state.answererName || "Player", word: state.currentAnswer }];
+  }
+  return [];
+}
+
+function submitAnswer(answer, playerName) {
+  const safeWord = String(answer || "").trim().slice(0, 20);
+  if (!safeWord) return;
+  const safeName = String(playerName || getCurrentPlayerName() || "Player").trim();
+  const answers = getCurrentAnswers();
+  const existing = answers.findIndex((item) => normalizeName(item.playerName) === normalizeName(safeName));
+  const nextAnswer = { playerName: safeName, word: safeWord };
+  if (existing >= 0) answers[existing] = nextAnswer;
+  else answers.push(nextAnswer);
+  state.currentAnswers = answers;
+  state.currentAnswer = answers.map((item) => item.word).join(" / ");
+  if (allAnswerersSubmitted()) state.phase = "discussion";
+}
+
+function hasCurrentPlayerAnswered() {
+  const playerName = getCurrentPlayerName();
+  return getCurrentAnswers().some((answer) => normalizeName(answer.playerName) === normalizeName(playerName));
+}
+
+function allAnswerersSubmitted() {
+  const answerers = getActiveAnswererNames();
+  const answers = getCurrentAnswers();
+  return answerers.length > 0 && answerers.every((name) =>
+    answers.some((answer) => normalizeName(answer.playerName) === normalizeName(name))
+  );
+}
+
+function answerSummary() {
+  const answers = getCurrentAnswers();
+  if (!answers.length) return "回答";
+  return `回答 ${answers.map((answer) => `「${answer.word}」`).join(" / ")}`;
 }
 
 function createHintBox() {
@@ -592,6 +702,30 @@ function answerBox() {
   const box = document.createElement("div");
   box.className = "result-box";
   box.innerHTML = `回答<span class="answer-word">${escapeHtml(state.currentAnswer)}</span>`;
+  return box;
+}
+
+function answersBox() {
+  const box = document.createElement("div");
+  box.className = "answers-box";
+  const title = document.createElement("strong");
+  const answers = getCurrentAnswers();
+  const answerers = getActiveAnswererNames();
+  title.textContent = `回答 ${answers.length}/${answerers.length}`;
+  box.append(title);
+  if (!answers.length) {
+    box.append(note("まだ回答がありません。"));
+    return box;
+  }
+  const list = document.createElement("div");
+  list.className = "answer-list";
+  answers.forEach((answer) => {
+    const item = document.createElement("div");
+    item.className = "answer-item";
+    item.innerHTML = `<span>${escapeHtml(answer.playerName)}</span><strong>${escapeHtml(answer.word)}</strong>`;
+    list.append(item);
+  });
+  box.append(list);
   return box;
 }
 
@@ -646,12 +780,15 @@ function resultPanel(result) {
   const box = document.createElement("div");
   box.className = "result-panel";
   const remaining = Math.max(0, state.goalStreak - state.streak);
+  const answerHtml = Array.isArray(result.answers) && result.answers.length
+    ? result.answers.map((answer) => `<span class="answer-word small-answer">${escapeHtml(answer.word)}</span>`).join("")
+    : `<span class="answer-word">${escapeHtml(result.answer)}</span>`;
   const unlocked = result.unlockedRanks && result.unlockedRanks.length
     ? `<p class="unlock-note">新ランク ${result.unlockedRanks.join(" / ")} が解放されました。</p>`
     : "";
   box.innerHTML = `
     <div class="result-stamp ${result.success ? "success" : "failure"}">${result.success ? "正解" : "不正解"}</div>
-    <p class="answer-word">${escapeHtml(result.answer)}</p>
+    <div>${answerHtml}</div>
     <p>正解ランク <strong>${result.secretRank}</strong></p>
     <p>回答ランク <strong>${result.judgedRank}</strong></p>
     <p>クリアまであと <strong>${remaining}</strong> 連続正解</p>
@@ -679,8 +816,9 @@ function countWords() {
 }
 
 function canCurrentPlayerViewSecret() {
-  const playerName = window.TierGame ? window.TierGame.getPlayerName() : "";
-  return Boolean(state.currentSecretRank && state.answererName && normalizeName(playerName) === normalizeName(state.answererName));
+  const playerName = getCurrentPlayerName();
+  const answerers = getActiveAnswererNames();
+  return Boolean(state.currentSecretRank && answerers.some((name) => normalizeName(name) === normalizeName(playerName)));
 }
 
 function canCurrentPlayerJudge() {
@@ -689,6 +827,10 @@ function canCurrentPlayerJudge() {
 
 function normalizeName(name) {
   return String(name || "").trim().toLowerCase();
+}
+
+function getCurrentPlayerName() {
+  return window.TierGame ? window.TierGame.getPlayerName() : "Player";
 }
 
 function resultMessage(type, text) {
@@ -751,6 +893,51 @@ function sendRemoteAction(type, payload = {}) {
   return true;
 }
 
+function submitChat() {
+  if (!els.chatInput) return;
+  const text = els.chatInput.value.trim();
+  if (!text) return;
+  els.chatInput.value = "";
+  const playerName = getCurrentPlayerName();
+  if (sendRemoteAction("chat", { text, playerName })) return;
+  appendChat(text, playerName);
+  saveGame();
+  render();
+}
+
+function appendChat(text, playerName) {
+  const safeText = String(text || "").trim().slice(0, 120);
+  if (!safeText) return;
+  if (!Array.isArray(state.chatMessages)) state.chatMessages = [];
+  state.chatMessages.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    playerName: String(playerName || "Player").slice(0, 12),
+    text: safeText,
+    turn: state.round
+  });
+  state.chatMessages = state.chatMessages.slice(-80);
+}
+
+function renderChat() {
+  if (!els.chatLog) return;
+  const messages = Array.isArray(state.chatMessages) ? state.chatMessages.slice(-30) : [];
+  els.chatLog.innerHTML = "";
+  if (!messages.length) {
+    const empty = document.createElement("div");
+    empty.className = "chat-empty";
+    empty.textContent = "まだチャットはありません";
+    els.chatLog.append(empty);
+    return;
+  }
+  messages.forEach((message) => {
+    const item = document.createElement("div");
+    item.className = "chat-message";
+    item.innerHTML = `<strong>${escapeHtml(message.playerName || "Player")}</strong><span>${escapeHtml(message.text || "")}</span>`;
+    els.chatLog.append(item);
+  });
+  els.chatLog.scrollTop = els.chatLog.scrollHeight;
+}
+
 function exportOnlineState() {
   return exportOnlineStateForPlayer();
 }
@@ -763,7 +950,8 @@ function exportOnlineStateForPlayer(playerName = "") {
   const canSee =
     state.phase === "result" ||
     state.phase === "clear" ||
-    (state.currentSecretRank && normalizeName(playerName) === normalizeName(state.answererName));
+    (state.currentSecretRank && getActiveAnswererNames()
+      .some((name) => normalizeName(name) === normalizeName(playerName)));
   if (!canSee) next.currentSecretRank = "";
   return next;
 }
@@ -790,8 +978,12 @@ function applyRemoteAction(action) {
       break;
     case "submitAnswer":
       if (!payload.answer) return;
-      state.currentAnswer = String(payload.answer).trim();
-      state.phase = "discussion";
+      submitAnswer(payload.answer, payload.playerName);
+      saveGame();
+      render();
+      break;
+    case "chat":
+      appendChat(payload.text, payload.playerName);
       saveGame();
       render();
       break;

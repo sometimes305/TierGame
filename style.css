@@ -224,6 +224,70 @@ body[data-role="guest"] .game-setup-fields .button-row {
   white-space: nowrap;
 }
 
+.chat-panel {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  z-index: 18;
+  display: grid;
+  gap: 6px;
+  width: min(588px, calc(100% - 20px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 8px;
+  box-shadow: 0 12px 32px rgba(45, 38, 21, 0.16);
+  transform: translateX(-50%);
+}
+
+.chat-log {
+  display: grid;
+  gap: 5px;
+  max-height: 86px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.chat-empty,
+.chat-message {
+  border-radius: 6px;
+  background: #faf8f1;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.chat-empty {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.chat-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+}
+
+.chat-message strong {
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.chat-message span {
+  overflow-wrap: anywhere;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 6px;
+}
+
+.chat-form input,
+.chat-form button {
+  min-height: 38px;
+}
+
 .participant-list {
   display: flex;
   gap: 6px;
@@ -320,7 +384,7 @@ button:disabled {
 .app-shell {
   width: min(588px, calc(100% - 20px));
   margin: 0 auto;
-  padding: var(--top-exclusion-height) 0 26px;
+  padding: var(--top-exclusion-height) 0 154px;
 }
 
 .topbar {
@@ -849,11 +913,38 @@ button:focus-visible {
 
 .secret-box,
 .result-box,
-.hint-box {
+.hint-box,
+.answers-box {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #faf8f1;
   padding: 14px;
+}
+
+.answer-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.answer-item {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.answer-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.answer-item strong {
+  overflow-wrap: anywhere;
 }
 
 .compact-box {
@@ -893,6 +984,10 @@ button:focus-visible {
   font-size: 32px;
   font-weight: 950;
   overflow-wrap: anywhere;
+}
+
+.small-answer {
+  font-size: 22px;
 }
 
 .success {
@@ -942,7 +1037,7 @@ button:focus-visible {
   .app-shell {
     width: min(100% - 14px, 560px);
     padding-top: var(--top-exclusion-height);
-    padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 154px);
   }
 
   .topbar {
@@ -1088,5 +1183,13 @@ button:focus-visible {
 
   .room-panel {
     grid-template-columns: 1fr;
+  }
+
+  .chat-panel {
+    width: calc(100% - 12px);
+  }
+
+  .chat-log {
+    max-height: 74px;
   }
 }
