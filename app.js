@@ -43,15 +43,15 @@ els.help.addEventListener("click", showHowToPlay);
 render();
 
 function createInitialState() {
+  const auto = pick(AUTO_SETUPS);
   return {
-    topic: "",
+    topic: auto.topic,
     topicMode: "auto",
-    startWord: "",
-    initialRank: "B",
+    startWord: auto.startWord,
+    initialRank: auto.initialRank,
     goalStreak: 5,
     hintCount: 3,
     remainingHints: 3,
-    answererMode: "random",
     answererName: "",
     answererIndex: 0,
     streak: 0,
@@ -139,10 +139,9 @@ function renderPanel() {
     fragment.querySelector("#goalInput").value = state.goalStreak;
     fragment.querySelector("#hintCountInput").value = state.hintCount;
     fragment.querySelector(`[name="topicMode"][value="${state.topicMode || "auto"}"]`).checked = true;
-    fragment.querySelector(`[name="answererMode"][value="${state.answererMode || "random"}"]`).checked = true;
-    fragment.querySelector("#answererInput").value = state.answererName || "";
     fragment.querySelector("#loadButton").disabled = !localStorage.getItem(STORAGE_KEY);
     applySetupRoleUi(fragment);
+    bindSetupFormBehavior(fragment);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -155,30 +154,40 @@ function renderPanel() {
   }
 
   if (state.phase === "secret") {
+    const canView = canCurrentPlayerViewSecret();
     els.panelBody.append(
       createStack([
-        createSecretBox(),
+        createSecretBox(canView),
         metaBox("今回の回答者", state.answererName || "未定"),
         createButtonRow([
           button(state.secretVisible ? "隠す" : "秘密ランクを見る", () => {
             state.secretVisible = !state.secretVisible;
             render();
-          }, "primary"),
+          }, "primary", "button", !canView),
           button("回答入力へ", () => {
             if (sendRemoteAction("goAnswer")) return;
             state.secretVisible = false;
             state.phase = "answer";
             saveGame();
             render();
-          })
+          }, "", "button", !canView)
         ]),
-        note("回答者だけが確認して、見終わったら隠してください。")
+        note(canView ? "あなたが回答者です。確認したら隠して、単語入力へ進んでください。" : "回答者が秘密ランクを確認しています。ほかの人は見ないまま待ちます。")
       ])
     );
     return;
   }
 
   if (state.phase === "answer") {
+    if (!canCurrentPlayerViewSecret()) {
+      els.panelBody.append(
+        createStack([
+          metaBox("回答待ち", `${state.answererName || "回答者"}さんが回答を考えています...`),
+          note("単語が公開されるまで少し待ってください。")
+        ])
+      );
+      return;
+    }
     const form = document.createElement("form");
     form.className = "stack";
     form.innerHTML = `
@@ -220,7 +229,7 @@ function renderPanel() {
           state.phase = "judgement";
           saveGame();
           render();
-        }, "primary")
+        }, "primary", "button", !canCurrentPlayerJudge())
       ])
     ];
     els.panelBody.append(createStack(children));
@@ -235,7 +244,7 @@ function renderPanel() {
       picker.append(button(rank, () => {
         state.selectedRank = rank;
         render();
-      }, `rank-button rank-${rank}${selected}`, "button", state.eliminatedRanks.includes(rank)));
+      }, `rank-button rank-${rank}${selected}`, "button", state.eliminatedRanks.includes(rank) || !canCurrentPlayerJudge()));
     }
 
     els.panelBody.append(
@@ -243,7 +252,7 @@ function renderPanel() {
         answerBox(),
         picker,
         createButtonRow([
-          button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank),
+          button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank || !canCurrentPlayerJudge()),
           button("相談に戻る", () => {
             state.phase = "discussion";
             render();
@@ -301,7 +310,6 @@ function startGame(settings) {
   state.goalStreak = resolved.goalStreak;
   state.hintCount = resolved.hintCount;
   state.remainingHints = resolved.hintCount;
-  state.answererMode = resolved.answererMode;
   state.answererName = pickInitialAnswerer(resolved);
   addWord(state.initialRank, state.startWord, 0);
   prepareRound();
@@ -409,9 +417,9 @@ function resetGame() {
 function resolveSetup(settings = {}) {
   const topicMode = settings.topicMode === "manual" ? "manual" : "auto";
   const auto = pick(AUTO_SETUPS);
-  const topic = topicMode === "auto" ? auto.topic : String(settings.topic || "").trim();
-  const startWord = topicMode === "auto" ? auto.startWord : String(settings.startWord || "").trim();
-  const initialRank = topicMode === "auto" ? auto.initialRank : settings.initialRank;
+  const topic = String(settings.topic || (topicMode === "auto" ? auto.topic : "")).trim();
+  const startWord = String(settings.startWord || (topicMode === "auto" ? auto.startWord : "")).trim();
+  const initialRank = settings.initialRank || (topicMode === "auto" ? auto.initialRank : "B");
   return {
     topicMode,
     topic: topic || "強そうな動物",
@@ -419,8 +427,7 @@ function resolveSetup(settings = {}) {
     initialRank: ["A", "B", "C"].includes(initialRank) ? initialRank : "B",
     goalStreak: clamp(Number(settings.goalStreak) || 5, 1, 20),
     hintCount: clamp(Number(settings.hintCount) || 0, 0, 20),
-    answererMode: settings.answererMode === "specified" ? "specified" : "random",
-    answererName: String(settings.answererName || "").trim().slice(0, 12)
+    answererName: ""
   };
 }
 
@@ -436,11 +443,6 @@ function getParticipantNames() {
 
 function pickInitialAnswerer(settings) {
   const names = getParticipantNames();
-  if (settings.answererMode === "specified" && settings.answererName) {
-    const index = names.indexOf(settings.answererName);
-    state.answererIndex = index >= 0 ? index : 0;
-    return settings.answererName;
-  }
   state.answererIndex = Math.floor(Math.random() * names.length);
   return names[state.answererIndex];
 }
@@ -499,7 +501,6 @@ function normalizeLoadedState(loaded) {
   next.remainingHints = clamp(Number(next.remainingHints ?? next.hintCount) || 0, 0, next.hintCount);
   next.initialRank = ["A", "B", "C"].includes(next.initialRank) ? next.initialRank : "B";
   next.topicMode = next.topicMode === "manual" ? "manual" : "auto";
-  next.answererMode = next.answererMode === "specified" ? "specified" : "random";
   next.answererName = String(next.answererName || "");
   next.answererIndex = Math.max(0, Number(next.answererIndex) || 0);
   next.streak = Math.max(0, Number(next.streak) || 0);
@@ -508,12 +509,12 @@ function normalizeLoadedState(loaded) {
   return next;
 }
 
-function createSecretBox() {
+function createSecretBox(canView) {
   const box = document.createElement("div");
   box.className = "secret-box";
   const rank = document.createElement("div");
-  rank.className = state.secretVisible ? "secret-rank" : "secret-rank hidden-secret";
-  rank.textContent = state.secretVisible ? state.currentSecretRank : "隠れています";
+  rank.className = canView && state.secretVisible ? "secret-rank" : "secret-rank hidden-secret";
+  rank.textContent = canView && state.secretVisible ? state.currentSecretRank : "回答者だけ見られます";
   box.append(rank);
   return box;
 }
@@ -558,6 +559,19 @@ function canUseHint() {
     (rank) => rank !== state.currentSecretRank && !state.eliminatedRanks.includes(rank)
   );
   return state.remainingHints > 0 && candidates.length > 0;
+}
+
+function canCurrentPlayerViewSecret() {
+  const playerName = window.TierGame ? window.TierGame.getPlayerName() : "";
+  return Boolean(state.currentSecretRank && state.answererName && normalizeName(playerName) === normalizeName(state.answererName));
+}
+
+function canCurrentPlayerJudge() {
+  return !window.TierOnline || !window.TierOnline.online || window.TierOnline.isHost();
+}
+
+function normalizeName(name) {
+  return String(name || "").trim().toLowerCase();
 }
 
 function resultMessage(type, text) {
@@ -621,10 +635,20 @@ function sendRemoteAction(type, payload = {}) {
 }
 
 function exportOnlineState() {
-  return {
+  return exportOnlineStateForPlayer();
+}
+
+function exportOnlineStateForPlayer(playerName = "") {
+  const next = {
     ...state,
     secretVisible: false
   };
+  const canSee =
+    state.phase === "result" ||
+    state.phase === "clear" ||
+    (state.currentSecretRank && normalizeName(playerName) === normalizeName(state.answererName));
+  if (!canSee) next.currentSecretRank = "";
+  return next;
 }
 
 function importOnlineState(nextState) {
@@ -684,7 +708,10 @@ window.TierGame = {
   getPlayerName() {
     const input = document.querySelector("#username");
     const joinInput = document.querySelector("#usernameJoin");
-    return (input && input.value.trim()) || (joinInput && joinInput.value.trim()) || "Player";
+    return (input && input.value.trim()) ||
+      (joinInput && joinInput.value.trim()) ||
+      (window.TierOnline && window.TierOnline.localPlayerName) ||
+      "Player";
   },
   setPlayerName(name, icon) {
     const safeName = (name || "名無し").slice(0, 12);
@@ -715,10 +742,9 @@ window.TierGame = {
     state.goalStreak = nextSettings.goalStreak ?? state.goalStreak;
     state.hintCount = nextSettings.hintCount ?? state.hintCount;
     state.remainingHints = nextSettings.hintCount ?? state.remainingHints;
-    state.answererMode = nextSettings.answererMode ?? state.answererMode;
-    state.answererName = nextSettings.answererName ?? state.answererName;
     render();
   },
+  exportStateForPlayer: exportOnlineStateForPlayer,
   readSetupForm() {
     return readSetupForm(document);
   },
@@ -737,18 +763,14 @@ function applySetupRoleUi(root) {
   const initialRankInput = root.querySelector("#initialRankInput");
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
-  const answererInput = root.querySelector("#answererInput");
   const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
-  const answererModeInputs = [...root.querySelectorAll('[name="answererMode"]')];
   const controls = [
     topicInput,
     startWordInput,
     initialRankInput,
     goalInput,
     hintInput,
-    answererInput,
-    ...topicModeInputs,
-    ...answererModeInputs
+    ...topicModeInputs
   ].filter(Boolean);
 
   if (!isConnected) {
@@ -780,6 +802,36 @@ function applySetupRoleUi(root) {
   controls.forEach((control) => (control.disabled = true));
 }
 
+function bindSetupFormBehavior(root) {
+  const topicInput = root.querySelector("#topicInput");
+  const startWordInput = root.querySelector("#startWordInput");
+  const initialRankInput = root.querySelector("#initialRankInput");
+  const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
+  const applyMode = () => {
+    const mode = root.querySelector('[name="topicMode"]:checked')?.value || "auto";
+    const auto = mode === "auto";
+    [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
+      control.readOnly = auto && control.tagName !== "SELECT";
+      control.classList.toggle("readonly-preview", auto);
+    });
+  };
+  topicModeInputs.forEach((input) => {
+    if (input.dataset.boundSetupMode) return;
+    input.dataset.boundSetupMode = "1";
+    input.addEventListener("change", () => {
+      if (input.value === "auto" && input.checked) {
+        const auto = pick(AUTO_SETUPS);
+        if (topicInput) topicInput.value = auto.topic;
+        if (startWordInput) startWordInput.value = auto.startWord;
+        if (initialRankInput) initialRankInput.value = auto.initialRank;
+      }
+      applyMode();
+      syncSetupConfig();
+    });
+  });
+  applyMode();
+}
+
 function readSetupForm(root = document) {
   const topicInput = root.querySelector("#topicInput");
   const startWordInput = root.querySelector("#startWordInput");
@@ -787,17 +839,13 @@ function readSetupForm(root = document) {
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
   const checkedTopicMode = root.querySelector('[name="topicMode"]:checked');
-  const checkedAnswererMode = root.querySelector('[name="answererMode"]:checked');
-  const answererInput = root.querySelector("#answererInput");
   return {
     topicMode: checkedTopicMode ? checkedTopicMode.value : state.topicMode,
     topic: topicInput ? topicInput.value.trim() : state.topic,
     startWord: startWordInput ? startWordInput.value.trim() : state.startWord,
     initialRank: initialRankInput ? initialRankInput.value : state.initialRank,
     goalStreak: goalInput ? Number(goalInput.value) : state.goalStreak,
-    hintCount: hintInput ? Number(hintInput.value) : state.hintCount,
-    answererMode: checkedAnswererMode ? checkedAnswererMode.value : state.answererMode,
-    answererName: answererInput ? answererInput.value.trim() : state.answererName
+    hintCount: hintInput ? Number(hintInput.value) : state.hintCount
   };
 }
 

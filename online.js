@@ -304,7 +304,7 @@
     handleHostMessage(conn, msg) {
       if (msg.type === "handshake") {
         conn._playerName = msg.name || "Player";
-        conn.send({ type: "state", state: window.TierGame.exportState() });
+        conn.send({ type: "state", state: this.stateForPlayer(conn._playerName) });
         conn.send({ type: "config", settings: window.TierGame.readSetupForm ? window.TierGame.readSetupForm() : {} });
         this.refreshStatus(`${conn._playerName}が入室しました`);
         return;
@@ -328,9 +328,16 @@
       this.conns.forEach((conn) => {
         if (!conn || !conn.open) return;
         try {
-          conn.send({ type: "state", state });
+          conn.send({ type: "state", state: this.stateForPlayer(conn._playerName, state) });
         } catch {}
       });
+    },
+
+    stateForPlayer(playerName, fallbackState) {
+      if (window.TierGame && typeof window.TierGame.exportStateForPlayer === "function") {
+        return window.TierGame.exportStateForPlayer(playerName || "");
+      }
+      return fallbackState || (window.TierGame && window.TierGame.exportState ? window.TierGame.exportState() : {});
     },
 
     broadcastConfig(settings) {

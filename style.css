@@ -499,6 +499,12 @@ body[data-phase="answer"] .control-panel {
   padding: 10px 12px;
 }
 
+.readonly-preview {
+  background: #faf8f1;
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
 .phase-pill {
   align-self: center;
   min-width: 112px;
