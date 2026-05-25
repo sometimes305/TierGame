@@ -75,10 +75,37 @@
       <form class="stack" id="setupForm">
         <section class="game-setup-fields">
           <div class="host-config-status" id="hostConfigStatus">ホストがルールを設定中...</div>
+          <fieldset class="segmented">
+            <legend>お題生成</legend>
+            <label>
+              <input type="radio" name="topicMode" value="auto" checked />
+              <span>自動生成</span>
+            </label>
+            <label>
+              <input type="radio" name="topicMode" value="manual" />
+              <span>手動入力</span>
+            </label>
+          </fieldset>
+
           <label>
             <span>お題</span>
-            <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" required />
+            <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" />
           </label>
+
+          <div class="grid-2">
+            <label>
+              <span>スタートワード</span>
+              <input id="startWordInput" maxlength="20" placeholder="例: オオカミ" />
+            </label>
+            <label>
+              <span>初期ランク</span>
+              <select id="initialRankInput">
+                <option value="A">A</option>
+                <option value="B" selected>B</option>
+                <option value="C">C</option>
+              </select>
+            </label>
+          </div>
 
           <div class="grid-2">
             <label>
@@ -86,26 +113,33 @@
               <input id="goalInput" type="number" min="1" max="20" value="5" required />
             </label>
             <label>
-              <span>ヒント</span>
+              <span>ヒント総数</span>
               <select id="hintCountInput">
                 <option value="0">なし</option>
-                <option value="1" selected>1つ除外</option>
-                <option value="2">2つ除外</option>
+                <option value="1">1回</option>
+                <option value="2">2回</option>
+                <option value="3" selected>3回</option>
+                <option value="5">5回</option>
               </select>
             </label>
           </div>
 
           <fieldset class="segmented">
-            <legend>モード</legend>
+            <legend>最初の回答者</legend>
             <label>
-              <input type="radio" name="mode" value="group" checked />
-              <span>みんなで</span>
+              <input type="radio" name="answererMode" value="random" checked />
+              <span>ランダム</span>
             </label>
             <label>
-              <input type="radio" name="mode" value="solo" />
-              <span>私の</span>
+              <input type="radio" name="answererMode" value="specified" />
+              <span>指定</span>
             </label>
           </fieldset>
+
+          <label>
+            <span>指定回答者</span>
+            <input id="answererInput" maxlength="12" placeholder="名前を入力" />
+          </label>
 
           <div class="button-row">
             <button type="submit" class="primary">ゲーム開始</button>

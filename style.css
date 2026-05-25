@@ -730,6 +730,12 @@ button:focus-visible {
   font-weight: 900;
 }
 
+.rank-button.selected {
+  outline: 3px solid rgba(23, 107, 100, 0.28);
+  outline-offset: 2px;
+  transform: translateY(-1px);
+}
+
 .secret-box,
 .result-box,
 .hint-box {
@@ -737,6 +743,15 @@ button:focus-visible {
   border-radius: var(--radius);
   background: #faf8f1;
   padding: 14px;
+}
+
+.compact-box {
+  padding: 10px 12px;
+}
+
+.compact-box strong {
+  display: block;
+  font-size: 20px;
 }
 
 .secret-rank {

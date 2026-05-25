@@ -1,6 +1,13 @@
 const STORAGE_KEY = "tier-sense-state-v1";
 const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
+const AUTO_SETUPS = [
+  { topic: "強そうな動物", startWord: "オオカミ", initialRank: "B" },
+  { topic: "好きな食べ物", startWord: "カレー", initialRank: "A" },
+  { topic: "モテそうな職業", startWord: "美容師", initialRank: "B" },
+  { topic: "学校にありそうなもの", startWord: "黒板", initialRank: "B" },
+  { topic: "旅行先として行きたい場所", startWord: "京都", initialRank: "A" }
+];
 const PHASE_LABELS = {
   setup: "セットアップ",
   secret: "秘密ランク",
@@ -38,14 +45,21 @@ render();
 function createInitialState() {
   return {
     topic: "",
-    mode: "group",
+    topicMode: "auto",
+    startWord: "",
+    initialRank: "B",
     goalStreak: 5,
-    hintCount: 1,
+    hintCount: 3,
+    remainingHints: 3,
+    answererMode: "random",
+    answererName: "",
+    answererIndex: 0,
     streak: 0,
     round: 1,
     currentSecretRank: "",
     currentAnswer: "",
     judgedRank: "",
+    selectedRank: "",
     eliminatedRanks: [],
     secretVisible: false,
     unlockedRanks: [...INITIAL_RANKS],
@@ -103,7 +117,7 @@ function renderBoard() {
       for (const word of words) {
         const chip = document.createElement("span");
         chip.className = "word-chip";
-        chip.textContent = word;
+        chip.textContent = typeof word === "string" ? word : word.word;
         wordCell.append(chip);
       }
     }
@@ -120,21 +134,19 @@ function renderPanel() {
     const fragment = els.setupTemplate.content.cloneNode(true);
     const form = fragment.querySelector("#setupForm");
     fragment.querySelector("#topicInput").value = state.topic || "";
+    fragment.querySelector("#startWordInput").value = state.startWord || "";
+    fragment.querySelector("#initialRankInput").value = state.initialRank || "B";
     fragment.querySelector("#goalInput").value = state.goalStreak;
     fragment.querySelector("#hintCountInput").value = state.hintCount;
-    fragment.querySelector(`[name="mode"][value="${state.mode}"]`).checked = true;
+    fragment.querySelector(`[name="topicMode"][value="${state.topicMode || "auto"}"]`).checked = true;
+    fragment.querySelector(`[name="answererMode"][value="${state.answererMode || "random"}"]`).checked = true;
+    fragment.querySelector("#answererInput").value = state.answererName || "";
     fragment.querySelector("#loadButton").disabled = !localStorage.getItem(STORAGE_KEY);
     applySetupRoleUi(fragment);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const formData = new FormData(form);
-      startGame({
-        topic: form.querySelector("#topicInput").value.trim(),
-        goalStreak: Number(form.querySelector("#goalInput").value),
-        hintCount: Number(form.querySelector("#hintCountInput").value),
-        mode: formData.get("mode")
-      });
+      startGame(readSetupForm(form));
     });
 
     fragment.querySelector("#loadButton").addEventListener("click", loadGame);
@@ -146,6 +158,7 @@ function renderPanel() {
     els.panelBody.append(
       createStack([
         createSecretBox(),
+        metaBox("今回の回答者", state.answererName || "未定"),
         createButtonRow([
           button(state.secretVisible ? "隠す" : "秘密ランクを見る", () => {
             state.secretVisible = !state.secretVisible;
@@ -159,7 +172,7 @@ function renderPanel() {
             render();
           })
         ]),
-        note(state.mode === "group" ? "回答者だけが確認して、見終わったら隠してください。" : "固定回答者用の秘密ランクです。")
+        note("回答者だけが確認して、見終わったら隠してください。")
       ])
     );
     return;
@@ -171,7 +184,7 @@ function renderPanel() {
     form.innerHTML = `
       <label>
         <span>回答単語</span>
-        <input id="answerInput" maxlength="30" placeholder="例: ワニ" required />
+        <input id="answerInput" maxlength="20" placeholder="例: ワニ" required />
       </label>
     `;
     const row = createButtonRow([
@@ -201,7 +214,7 @@ function renderPanel() {
       answerBox(),
       createHintBox(),
       createButtonRow([
-        button("ヒントを使う", useHint, "ghost", "button", state.hintCount === 0 || state.eliminatedRanks.length >= state.hintCount),
+        button("ヒントを使う", useHint, "ghost", "button", !canUseHint()),
         button("オーナー判定へ", () => {
           if (sendRemoteAction("goJudgement")) return;
           state.phase = "judgement";
@@ -218,17 +231,24 @@ function renderPanel() {
     const picker = document.createElement("div");
     picker.className = "rank-picker";
     for (const rank of state.unlockedRanks) {
-      picker.append(button(rank, () => judge(rank), `rank-button rank-${rank}`));
+      const selected = state.selectedRank === rank ? " selected" : "";
+      picker.append(button(rank, () => {
+        state.selectedRank = rank;
+        render();
+      }, `rank-button rank-${rank}${selected}`, "button", state.eliminatedRanks.includes(rank)));
     }
 
     els.panelBody.append(
       createStack([
         answerBox(),
         picker,
-        button("相談に戻る", () => {
-          state.phase = "discussion";
-          render();
-        })
+        createButtonRow([
+          button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank),
+          button("相談に戻る", () => {
+            state.phase = "discussion";
+            render();
+          })
+        ])
       ])
     );
     return;
@@ -270,13 +290,20 @@ function renderPanel() {
   }
 }
 
-function startGame({ topic, goalStreak, hintCount, mode }) {
-  if (sendRemoteAction("startGame", { topic, goalStreak, hintCount, mode })) return;
+function startGame(settings) {
+  const resolved = resolveSetup(settings);
+  if (sendRemoteAction("startGame", resolved)) return;
   state = createInitialState();
-  state.topic = topic || "強そうな動物";
-  state.goalStreak = clamp(goalStreak || 5, 1, 20);
-  state.hintCount = clamp(hintCount || 0, 0, 2);
-  state.mode = mode === "solo" ? "solo" : "group";
+  state.topic = resolved.topic;
+  state.topicMode = resolved.topicMode;
+  state.startWord = resolved.startWord;
+  state.initialRank = resolved.initialRank;
+  state.goalStreak = resolved.goalStreak;
+  state.hintCount = resolved.hintCount;
+  state.remainingHints = resolved.hintCount;
+  state.answererMode = resolved.answererMode;
+  state.answererName = pickInitialAnswerer(resolved);
+  addWord(state.initialRank, state.startWord, 0);
   prepareRound();
   saveGame();
   render();
@@ -286,6 +313,7 @@ function prepareRound() {
   state.currentSecretRank = pick(state.unlockedRanks);
   state.currentAnswer = "";
   state.judgedRank = "";
+  state.selectedRank = "";
   state.eliminatedRanks = [];
   state.secretVisible = false;
   state.lastResult = null;
@@ -294,24 +322,27 @@ function prepareRound() {
 
 function useHint() {
   if (sendRemoteAction("useHint")) return;
-  if (state.hintCount === 0) return;
-  if (state.eliminatedRanks.length >= state.hintCount) return;
+  if (!canUseHint()) return;
 
   const candidates = state.unlockedRanks.filter(
     (rank) => rank !== state.currentSecretRank && !state.eliminatedRanks.includes(rank)
   );
-  const next = pick(candidates);
-  if (next) state.eliminatedRanks.push(next);
+  for (let i = 0; i < 2; i += 1) {
+    const next = pick(candidates.filter((rank) => !state.eliminatedRanks.includes(rank)));
+    if (next) state.eliminatedRanks.push(next);
+  }
+  state.remainingHints = Math.max(0, state.remainingHints - 1);
   saveGame();
   render();
 }
 
 function judge(rank) {
+  if (!rank || state.eliminatedRanks.includes(rank)) return;
   if (sendRemoteAction("judge", { rank })) return;
   const success = rank === state.currentSecretRank;
   state.judgedRank = rank;
   state.streak = success ? state.streak + 1 : 0;
-  addWord(rank, state.currentAnswer);
+  addWord(rank, state.currentAnswer, state.round);
   unlockOuterRanks(rank);
   state.lastResult = {
     success,
@@ -324,9 +355,9 @@ function judge(rank) {
   render();
 }
 
-function addWord(rank, word) {
+function addWord(rank, word, turn = state.round) {
   if (!state.tierTable[rank]) state.tierTable[rank] = [];
-  state.tierTable[rank].push(word);
+  state.tierTable[rank].push({ word, rank, turn });
 }
 
 function unlockOuterRanks(rank) {
@@ -349,6 +380,7 @@ function unlockRank(rank) {
 function nextRound() {
   if (sendRemoteAction("nextRound")) return;
   state.round += 1;
+  rotateAnswerer();
   prepareRound();
   saveGame();
   render();
@@ -358,6 +390,7 @@ function restartKeepingBoard() {
   if (sendRemoteAction("restartKeepingBoard")) return;
   state.streak = 0;
   state.round += 1;
+  rotateAnswerer();
   prepareRound();
   saveGame();
   render();
@@ -373,8 +406,56 @@ function resetGame() {
   }
 }
 
+function resolveSetup(settings = {}) {
+  const topicMode = settings.topicMode === "manual" ? "manual" : "auto";
+  const auto = pick(AUTO_SETUPS);
+  const topic = topicMode === "auto" ? auto.topic : String(settings.topic || "").trim();
+  const startWord = topicMode === "auto" ? auto.startWord : String(settings.startWord || "").trim();
+  const initialRank = topicMode === "auto" ? auto.initialRank : settings.initialRank;
+  return {
+    topicMode,
+    topic: topic || "強そうな動物",
+    startWord: (startWord || "オオカミ").slice(0, 20),
+    initialRank: ["A", "B", "C"].includes(initialRank) ? initialRank : "B",
+    goalStreak: clamp(Number(settings.goalStreak) || 5, 1, 20),
+    hintCount: clamp(Number(settings.hintCount) || 0, 0, 20),
+    answererMode: settings.answererMode === "specified" ? "specified" : "random",
+    answererName: String(settings.answererName || "").trim().slice(0, 12)
+  };
+}
+
+function getParticipantNames() {
+  const online = window.TierOnline;
+  const names = online && Array.isArray(online.participants)
+    ? online.participants.map((player) => player.name).filter(Boolean)
+    : [];
+  const selfName = window.TierGame ? window.TierGame.getPlayerName() : "";
+  if (selfName && !names.includes(selfName)) names.unshift(selfName);
+  return names.length ? names : ["Player"];
+}
+
+function pickInitialAnswerer(settings) {
+  const names = getParticipantNames();
+  if (settings.answererMode === "specified" && settings.answererName) {
+    const index = names.indexOf(settings.answererName);
+    state.answererIndex = index >= 0 ? index : 0;
+    return settings.answererName;
+  }
+  state.answererIndex = Math.floor(Math.random() * names.length);
+  return names[state.answererIndex];
+}
+
+function rotateAnswerer() {
+  const names = getParticipantNames();
+  if (!names.length) return;
+  const current = names.indexOf(state.answererName);
+  state.answererIndex = current >= 0 ? current + 1 : state.answererIndex + 1;
+  state.answererIndex %= names.length;
+  state.answererName = names[state.answererIndex];
+}
+
 function showHowToPlay() {
-  alert("回答者だけが秘密ランクを見て、そのランクっぽい単語を入力します。みんなで相談し、オーナーがランクを選びます。秘密ランクと一致したら連続正解です。");
+  alert("回答者が秘密ランクに合う単語を入力し、全員で相談します。オーナーがランクを選び、秘密ランクと一致すれば連続正解。不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
 }
 
 function saveGame() {
@@ -404,9 +485,23 @@ function normalizeLoadedState(loaded) {
   next.tierTable = next.tierTable || {};
   for (const rank of next.unlockedRanks) {
     if (!Array.isArray(next.tierTable[rank])) next.tierTable[rank] = [];
+    next.tierTable[rank] = next.tierTable[rank]
+      .filter(Boolean)
+      .map((entry) => typeof entry === "string" ? { word: entry, rank, turn: 0 } : {
+        word: String(entry.word || ""),
+        rank: ALL_RANKS.includes(entry.rank) ? entry.rank : rank,
+        turn: Math.max(0, Number(entry.turn) || 0)
+      })
+      .filter((entry) => entry.word);
   }
   next.goalStreak = clamp(Number(next.goalStreak) || 5, 1, 20);
-  next.hintCount = clamp(Number(next.hintCount) || 0, 0, 2);
+  next.hintCount = clamp(Number(next.hintCount) || 0, 0, 20);
+  next.remainingHints = clamp(Number(next.remainingHints ?? next.hintCount) || 0, 0, next.hintCount);
+  next.initialRank = ["A", "B", "C"].includes(next.initialRank) ? next.initialRank : "B";
+  next.topicMode = next.topicMode === "manual" ? "manual" : "auto";
+  next.answererMode = next.answererMode === "specified" ? "specified" : "random";
+  next.answererName = String(next.answererName || "");
+  next.answererIndex = Math.max(0, Number(next.answererIndex) || 0);
   next.streak = Math.max(0, Number(next.streak) || 0);
   next.round = Math.max(1, Number(next.round) || 1);
   next.phase = PHASE_LABELS[next.phase] ? next.phase : "setup";
@@ -426,10 +521,10 @@ function createSecretBox() {
 function createHintBox() {
   const box = document.createElement("div");
   box.className = "hint-box";
-  box.innerHTML = `<strong>ヒント</strong>`;
+  box.innerHTML = `<strong>ヒント 残り${state.remainingHints}回</strong>`;
 
   if (state.eliminatedRanks.length === 0) {
-    box.append(note("まだ使っていません。"));
+    box.append(note("使うと、秘密ランクではない候補を2つ除外します。"));
     return box;
   }
 
@@ -449,6 +544,20 @@ function answerBox() {
   box.className = "result-box";
   box.innerHTML = `回答<span class="answer-word">${escapeHtml(state.currentAnswer)}</span>`;
   return box;
+}
+
+function metaBox(label, value) {
+  const box = document.createElement("div");
+  box.className = "result-box compact-box";
+  box.innerHTML = `<p class="label">${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong>`;
+  return box;
+}
+
+function canUseHint() {
+  const candidates = state.unlockedRanks.filter(
+    (rank) => rank !== state.currentSecretRank && !state.eliminatedRanks.includes(rank)
+  );
+  return state.remainingHints > 0 && candidates.length > 0;
 }
 
 function resultMessage(type, text) {
@@ -600,9 +709,14 @@ window.TierGame = {
   },
   previewSetup(nextSettings) {
     state.topic = nextSettings.topic ?? state.topic;
+    state.topicMode = nextSettings.topicMode ?? state.topicMode;
+    state.startWord = nextSettings.startWord ?? state.startWord;
+    state.initialRank = nextSettings.initialRank ?? state.initialRank;
     state.goalStreak = nextSettings.goalStreak ?? state.goalStreak;
     state.hintCount = nextSettings.hintCount ?? state.hintCount;
-    state.mode = nextSettings.mode ?? state.mode;
+    state.remainingHints = nextSettings.hintCount ?? state.remainingHints;
+    state.answererMode = nextSettings.answererMode ?? state.answererMode;
+    state.answererName = nextSettings.answererName ?? state.answererName;
     render();
   },
   readSetupForm() {
@@ -619,10 +733,23 @@ function applySetupRoleUi(root) {
   const status = root.querySelector("#hostConfigStatus");
   const startButton = root.querySelector('button[type="submit"]');
   const topicInput = root.querySelector("#topicInput");
+  const startWordInput = root.querySelector("#startWordInput");
+  const initialRankInput = root.querySelector("#initialRankInput");
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
-  const modeInputs = [...root.querySelectorAll('[name="mode"]')];
-  const controls = [topicInput, goalInput, hintInput, ...modeInputs].filter(Boolean);
+  const answererInput = root.querySelector("#answererInput");
+  const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
+  const answererModeInputs = [...root.querySelectorAll('[name="answererMode"]')];
+  const controls = [
+    topicInput,
+    startWordInput,
+    initialRankInput,
+    goalInput,
+    hintInput,
+    answererInput,
+    ...topicModeInputs,
+    ...answererModeInputs
+  ].filter(Boolean);
 
   if (!isConnected) {
     if (status) status.textContent = "部屋を作成または参加してください。";
@@ -655,14 +782,22 @@ function applySetupRoleUi(root) {
 
 function readSetupForm(root = document) {
   const topicInput = root.querySelector("#topicInput");
+  const startWordInput = root.querySelector("#startWordInput");
+  const initialRankInput = root.querySelector("#initialRankInput");
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
-  const checkedMode = root.querySelector('[name="mode"]:checked');
+  const checkedTopicMode = root.querySelector('[name="topicMode"]:checked');
+  const checkedAnswererMode = root.querySelector('[name="answererMode"]:checked');
+  const answererInput = root.querySelector("#answererInput");
   return {
+    topicMode: checkedTopicMode ? checkedTopicMode.value : state.topicMode,
     topic: topicInput ? topicInput.value.trim() : state.topic,
+    startWord: startWordInput ? startWordInput.value.trim() : state.startWord,
+    initialRank: initialRankInput ? initialRankInput.value : state.initialRank,
     goalStreak: goalInput ? Number(goalInput.value) : state.goalStreak,
     hintCount: hintInput ? Number(hintInput.value) : state.hintCount,
-    mode: checkedMode ? checkedMode.value : state.mode
+    answererMode: checkedAnswererMode ? checkedAnswererMode.value : state.answererMode,
+    answererName: answererInput ? answererInput.value.trim() : state.answererName
   };
 }
 
