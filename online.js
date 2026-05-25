@@ -1,9 +1,10 @@
 (function () {
-  const ROOM_TYPE = "aitools_tier_game_room";
+  const ROOM_TYPE = "aitools_game_room";
   const PEER_PREFIX = "tier_sense_rt_";
+  const SDK_TIMEOUT_MS = 10000;
 
   const online = {
-    isGravity: window.self !== window.top,
+    isGravity: window.self !== window.top || new URLSearchParams(window.location.search).has("username") || new URLSearchParams(window.location.search).has("room_id") || new URLSearchParams(window.location.search).has("roomid"),
     gravityRequests: {},
     gravityRoomRequests: {},
     gravityUserInfo: null,
@@ -75,7 +76,7 @@
         return;
       }
       if (!this.online) {
-        message = this.isGravity ? "Gravity: 未接続" : "オフライン";
+        message = this.isGravity ? "Gravity: 未接続" : "Gravity内で起動してください";
       } else {
         message = `${this.host ? "ホスト" : "ゲスト"} / 部屋ID: ${String(this.roomId || "----").slice(-5)}`;
       }
@@ -223,27 +224,24 @@
       this.localPlayerName = window.TierGame.getPlayerName();
       this.host = true;
       this.online = true;
-      this.refreshStatus("部屋を作成中...");
+      this.refreshStatus("Gravityで部屋を作成中...");
       try {
-        if (this.isGravity) {
-          const res = await this.callGravityRoomSDK("create_room", {
-            room_type: ROOM_TYPE,
-            max_players: 8,
-            maxplayers: 8,
-            room_permission: 0,
-            permission: 0
-          });
-          const roomData = (res && res.data) || res || {};
-          this.roomId = roomData.room_id || roomData.roomId || String(Math.floor(1000 + Math.random() * 9000));
-        } else {
-          this.roomId = String(Math.floor(1000 + Math.random() * 9000));
-        }
+        const res = await this.callGravityRoomSDK("create_room", {
+          room_type: ROOM_TYPE,
+          max_players: 8,
+          maxplayers: 8,
+          room_permission: 0,
+          permission: 0
+        });
+        const roomData = (res && res.data) || res || {};
+        this.roomId = roomData.room_id || roomData.roomId;
+        if (!this.roomId) throw new Error(`room_idが返ってきません: ${JSON.stringify(res)}`);
         this.startHostPeer(this.roomId);
         this.refreshStatus();
       } catch (error) {
         console.warn("[TierOnline] create room failed:", error);
         this.online = false;
-        this.refreshStatus("部屋作成に失敗しました");
+        this.refreshStatus(`部屋作成失敗: ${this.errorText(error)}`);
       }
     },
 
@@ -256,19 +254,17 @@
       this.localPlayerName = window.TierGame.getPlayerName();
       this.host = false;
       this.online = true;
-      this.refreshStatus("入室中...");
+      this.refreshStatus("Gravityで入室中...");
       try {
-        if (this.isGravity) {
-          if (rid.length <= 10) rid = await this.findFullRoomId(rid);
-          await this.callGravityRoomSDK("join_room", { room_id: rid });
-        }
+        if (rid.length <= 10) rid = await this.findFullRoomId(rid);
+        await this.callGravityRoomSDK("join_room", { room_id: rid });
         this.roomId = rid;
         this.startGuestPeer(rid);
         this.refreshStatus();
       } catch (error) {
         console.warn("[TierOnline] join room failed:", error);
         this.online = false;
-        this.refreshStatus("入室に失敗しました");
+        this.refreshStatus(`入室失敗: ${this.errorText(error)}`);
       }
     },
 
@@ -276,10 +272,6 @@
       const list = document.querySelector("#roomList");
       if (!list) return;
       list.innerHTML = '<div class="room-list-loading">読み込み中...</div>';
-      if (!this.isGravity) {
-        list.innerHTML = '<div class="room-list-empty">Gravity外では公開ルーム一覧を取得できません。部屋IDで入室してください。</div>';
-        return;
-      }
       try {
         const rooms = await this.getPublicRooms();
         if (!rooms.length) {
@@ -308,7 +300,7 @@
         });
       } catch (error) {
         console.warn("[TierOnline] fetch rooms failed:", error);
-        list.innerHTML = '<div class="room-list-empty">ルーム情報の取得に失敗しました。</div>';
+        list.innerHTML = `<div class="room-list-empty">ルーム情報の取得に失敗しました: ${this.escapeHtml(this.errorText(error))}</div>`;
       }
     },
 
@@ -346,10 +338,13 @@
     },
 
     callGravitySDK(action, params) {
-      if (!this.isGravity) return Promise.reject("Not in Gravity environment");
       return new Promise((resolve, reject) => {
         const requestId = `req_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        this.gravityRequests[requestId] = { resolve, reject };
+        const timer = window.setTimeout(() => {
+          delete this.gravityRequests[requestId];
+          reject(new Error(`${action} timeout`));
+        }, SDK_TIMEOUT_MS);
+        this.gravityRequests[requestId] = { resolve, reject, timer };
         window.top.postMessage({
           type: "API",
           action,
@@ -360,10 +355,13 @@
     },
 
     callGravityRoomSDK(action, params) {
-      if (!this.isGravity) return Promise.reject("Not in Gravity environment");
       return new Promise((resolve, reject) => {
         const requestId = `${action}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        this.gravityRoomRequests[requestId] = { resolve, reject };
+        const timer = window.setTimeout(() => {
+          delete this.gravityRoomRequests[requestId];
+          reject(new Error(`${action} timeout`));
+        }, SDK_TIMEOUT_MS);
+        this.gravityRoomRequests[requestId] = { resolve, reject, timer };
         const message = { action, actionId: requestId, actionld: requestId };
         if (params) Object.assign(message, params);
         window.parent.postMessage(message, "*");
@@ -387,20 +385,48 @@
 
       if (!this.isGravity) {
         window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
+        this.refreshStatus("Gravity内で起動してください");
         return;
       }
 
       try {
+        this.refreshStatus("Gravityユーザー取得中...");
         const user = await this.callGravitySDK("AgentSDK.user.getMyUserInfo");
-        if (user && (user.name || user.nickname || user.user_name)) {
+        const normalized = this.normalizeUser(user);
+        if (normalized && normalized.name) {
           this.gravityUserInfo = user;
-          this.localPlayerName = user.name || user.nickname || user.user_name;
-          this.localPlayerIcon = user.portrait || user.avatar || user.icon || user.head_img || user.headimgurl || user.profile_image || null;
+          this.localPlayerName = normalized.name;
+          this.localPlayerIcon = normalized.icon;
           window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
+          this.refreshStatus("Gravityユーザー取得済み");
+        } else {
+          this.refreshStatus(`ユーザー情報なし: ${JSON.stringify(user || {})}`.slice(0, 80));
         }
       } catch (error) {
         console.warn("[TierOnline] Gravity user load failed:", error);
+        this.refreshStatus(`ユーザー取得失敗: ${this.errorText(error)}`);
       }
+    },
+
+    normalizeUser(raw) {
+      const user = (raw && raw.data) || (raw && raw.payload) || raw;
+      if (!user || typeof user !== "object") return null;
+      return {
+        name: user.name || user.nickname || user.user_name || user.userName || user.nick_name || "",
+        icon: user.portrait || user.avatar || user.icon || user.head_img || user.headimgurl || user.profile_image || user.profileImage || null
+      };
+    },
+
+    errorText(error) {
+      if (!error) return "unknown";
+      if (typeof error === "string") return error;
+      return error.message || JSON.stringify(error);
+    },
+
+    escapeHtml(value) {
+      const div = document.createElement("div");
+      div.textContent = value;
+      return div.innerHTML;
     }
   };
 
@@ -411,8 +437,9 @@
     if (data.type === "API_CALLBACK" && data.requestId) {
       const req = online.gravityRequests[data.requestId];
       if (!req) return;
+      window.clearTimeout(req.timer);
       if (data.error) req.reject(data.error);
-      else req.resolve(data.payload);
+      else req.resolve(data.payload || data.result || data.data);
       delete online.gravityRequests[data.requestId];
       return;
     }
@@ -421,6 +448,7 @@
     if ((data.type === "gravityroomresponse" || data.type === "gravity_room_response") && responseId) {
       const req = online.gravityRoomRequests[responseId];
       if (!req) return;
+      window.clearTimeout(req.timer);
       const result = data.result || {};
       if (result.errno !== undefined && result.errno !== 0) {
         req.reject(`SDK Error (errno:${result.errno}): ${result.errmsg || "Unknown"}`);
