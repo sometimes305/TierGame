@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Tier Sense</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button type="button" class="topbar-button" id="endGameButton">ゲーム終了</button>
+        <div class="title-block">
+          <p class="eyebrow">Tier Sense</p>
+          <h1 id="headerPhaseDisplay">セットアップ</h1>
+          <div id="onlineBadge" class="online-badge">オフライン</div>
+        </div>
+        <button type="button" class="topbar-button" id="helpButton">遊び方</button>
+      </header>
+
+      <main class="game-layout">
+        <section class="board-area" aria-labelledby="boardTitle">
+          <div class="topic-row">
+            <div class="topic-box">
+              <p class="label">お題</p>
+              <h2 id="topicDisplay">未設定</h2>
+            </div>
+            <div class="score-strip" aria-label="ゲーム状況">
+              <div>
+                <span>連続</span>
+                <strong id="streakValue">0</strong>
+              </div>
+              <div>
+                <span>ゴール</span>
+                <strong id="goalValue">5</strong>
+              </div>
+              <div>
+                <span>ラウンド</span>
+                <strong id="roundValue">1</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="tier-board" id="tierBoard" aria-labelledby="boardTitle">
+            <h2 id="boardTitle" class="sr-only">ティア表</h2>
+          </div>
+        </section>
+
+        <aside class="control-panel" aria-labelledby="panelTitle">
+          <div class="panel-head">
+            <p class="label">操作</p>
+            <h2 id="panelTitle">セットアップ</h2>
+            <div class="phase-pill" id="phaseDisplay">セットアップ</div>
+          </div>
+          <div id="panelBody"></div>
+        </aside>
+      </main>
+    </div>
+
+    <template id="setupTemplate">
+      <form class="stack" id="setupForm">
+        <label>
+          <span>お題</span>
+          <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" required />
+        </label>
+
+        <div class="grid-2">
+          <label>
+            <span>ゴール連続数</span>
+            <input id="goalInput" type="number" min="1" max="20" value="5" required />
+          </label>
+          <label>
+            <span>ヒント</span>
+            <select id="hintCountInput">
+              <option value="0">なし</option>
+              <option value="1" selected>1つ除外</option>
+              <option value="2">2つ除外</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="segmented">
+          <legend>モード</legend>
+          <label>
+            <input type="radio" name="mode" value="group" checked />
+            <span>みんなで</span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="solo" />
+            <span>私の</span>
+          </label>
+        </fieldset>
+
+        <div class="button-row">
+          <button type="submit" class="primary">ゲーム開始</button>
+          <button type="button" id="loadButton">続きから</button>
+        </div>
+
+        <section class="online-panel" aria-label="オンライン">
+          <div class="online-profile">
+            <div class="avatar" id="profileAvatar">名</div>
+            <div>
+              <span>プレイヤー</span>
+              <strong id="displayUsername">名無し</strong>
+            </div>
+          </div>
+          <label>
+            <span>名前</span>
+            <input id="username" maxlength="12" placeholder="名前を入力" />
+          </label>
+          <div class="button-row">
+            <button type="button" id="createRoomButton" class="primary">部屋を作る</button>
+            <button type="button" id="refreshRoomsButton">部屋一覧</button>
+          </div>
+          <div class="join-row">
+            <input id="joinRoomInput" maxlength="32" placeholder="部屋ID" />
+            <button type="button" id="joinRoomButton">入室</button>
+          </div>
+          <div id="onlineStatus" class="online-status">オフライン</div>
+          <div id="roomList" class="room-list"></div>
+        </section>
+      </form>
+    </template>
+
+    <script src="app.js"></script>
+    <script src="online.js"></script>
+  </body>
+</html>
