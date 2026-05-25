@@ -32,6 +32,10 @@
 
     bindControls() {
       const nameInput = document.querySelector("#username");
+      const joinNameInput = document.querySelector("#usernameJoin");
+      const goCreateButton = document.querySelector("#goCreateRoomButton");
+      const goJoinButton = document.querySelector("#goJoinRoomButton");
+      const rulesButton = document.querySelector("#showRulesButton");
       const createButton = document.querySelector("#createRoomButton");
       const refreshButton = document.querySelector("#refreshRoomsButton");
       const joinButton = document.querySelector("#joinRoomButton");
@@ -44,6 +48,36 @@
           window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
         });
       }
+      if (joinNameInput && !joinNameInput.dataset.boundOnline) {
+        joinNameInput.dataset.boundOnline = "1";
+        joinNameInput.addEventListener("input", () => {
+          this.localPlayerName = joinNameInput.value.trim() || "Player";
+          window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
+        });
+      }
+      if (goCreateButton && !goCreateButton.dataset.boundOnline) {
+        goCreateButton.dataset.boundOnline = "1";
+        goCreateButton.addEventListener("click", () => this.showOnlineScreen("create"));
+      }
+      if (goJoinButton && !goJoinButton.dataset.boundOnline) {
+        goJoinButton.dataset.boundOnline = "1";
+        goJoinButton.addEventListener("click", () => {
+          this.showOnlineScreen("join");
+          this.fetchRoomList();
+        });
+      }
+      if (rulesButton && !rulesButton.dataset.boundOnline) {
+        rulesButton.dataset.boundOnline = "1";
+        rulesButton.addEventListener("click", () => {
+          const rules = document.querySelector("#rulesBox");
+          if (rules) rules.classList.toggle("hidden");
+        });
+      }
+      document.querySelectorAll("[data-online-back]").forEach((button) => {
+        if (button.dataset.boundOnline) return;
+        button.dataset.boundOnline = "1";
+        button.addEventListener("click", () => this.showOnlineScreen("home"));
+      });
       if (createButton && !createButton.dataset.boundOnline) {
         createButton.dataset.boundOnline = "1";
         createButton.addEventListener("click", () => this.createRoom());
@@ -68,9 +102,19 @@
       this.renderRoomUi();
     },
 
+    showOnlineScreen(name) {
+      document.querySelectorAll("[data-online-screen]").forEach((screen) => {
+        screen.classList.toggle("hidden", screen.dataset.onlineScreen !== name);
+      });
+      this.statusMessage = "";
+      this.refreshStatus();
+    },
+
     refreshProfile() {
       const input = document.querySelector("#username");
+      const joinInput = document.querySelector("#usernameJoin");
       if (input && !input.value) input.value = this.localPlayerName;
+      if (joinInput && !joinInput.value) joinInput.value = this.localPlayerName;
       window.TierGame.setPlayerName((input && input.value.trim()) || this.localPlayerName, this.localPlayerIcon);
     },
 

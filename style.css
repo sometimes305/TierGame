@@ -46,6 +46,49 @@ select {
   padding: 12px;
 }
 
+.game-setup-fields {
+  display: none;
+  gap: 14px;
+}
+
+body[data-online="connected"] .game-setup-fields {
+  display: grid;
+}
+
+.online-screen {
+  display: grid;
+  gap: 10px;
+}
+
+.screen-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.large-menu-button {
+  min-height: 54px;
+  font-size: 16px;
+}
+
+.small-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.rules-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
 .online-profile {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);

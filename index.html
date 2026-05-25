@@ -73,42 +73,44 @@
 
     <template id="setupTemplate">
       <form class="stack" id="setupForm">
-        <label>
-          <span>お題</span>
-          <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" required />
-        </label>
+        <section class="game-setup-fields">
+          <label>
+            <span>お題</span>
+            <input id="topicInput" maxlength="40" placeholder="例: 強そうな動物" required />
+          </label>
 
-        <div class="grid-2">
-          <label>
-            <span>ゴール連続数</span>
-            <input id="goalInput" type="number" min="1" max="20" value="5" required />
-          </label>
-          <label>
-            <span>ヒント</span>
-            <select id="hintCountInput">
-              <option value="0">なし</option>
-              <option value="1" selected>1つ除外</option>
-              <option value="2">2つ除外</option>
-            </select>
-          </label>
-        </div>
+          <div class="grid-2">
+            <label>
+              <span>ゴール連続数</span>
+              <input id="goalInput" type="number" min="1" max="20" value="5" required />
+            </label>
+            <label>
+              <span>ヒント</span>
+              <select id="hintCountInput">
+                <option value="0">なし</option>
+                <option value="1" selected>1つ除外</option>
+                <option value="2">2つ除外</option>
+              </select>
+            </label>
+          </div>
 
-        <fieldset class="segmented">
-          <legend>モード</legend>
-          <label>
-            <input type="radio" name="mode" value="group" checked />
-            <span>みんなで</span>
-          </label>
-          <label>
-            <input type="radio" name="mode" value="solo" />
-            <span>私の</span>
-          </label>
-        </fieldset>
+          <fieldset class="segmented">
+            <legend>モード</legend>
+            <label>
+              <input type="radio" name="mode" value="group" checked />
+              <span>みんなで</span>
+            </label>
+            <label>
+              <input type="radio" name="mode" value="solo" />
+              <span>私の</span>
+            </label>
+          </fieldset>
 
-        <div class="button-row">
-          <button type="submit" class="primary">ゲーム開始</button>
-          <button type="button" id="loadButton">続きから</button>
-        </div>
+          <div class="button-row">
+            <button type="submit" class="primary">ゲーム開始</button>
+            <button type="button" id="loadButton">続きから</button>
+          </div>
+        </section>
 
         <section class="online-panel" aria-label="オンライン">
           <div class="online-profile">
@@ -118,40 +120,68 @@
               <strong id="displayUsername">名無し</strong>
             </div>
           </div>
-          <label>
-            <span>名前</span>
-            <input id="username" maxlength="12" placeholder="名前を入力" />
-          </label>
-          <div class="grid-2">
-            <label>
-              <span>最大人数</span>
-              <select id="roomCapacity">
-                <option value="2">2人</option>
-                <option value="3">3人</option>
-                <option value="4" selected>4人</option>
-                <option value="6">6人</option>
-                <option value="8">8人</option>
-              </select>
-            </label>
-            <label>
-              <span>公開範囲</span>
-              <select id="roomPermission">
-                <option value="0" selected>公開</option>
-                <option value="1">非公開</option>
-              </select>
-            </label>
+          <div class="online-screen" data-online-screen="home">
+            <button type="button" id="goCreateRoomButton" class="primary large-menu-button">部屋を作る</button>
+            <button type="button" id="goJoinRoomButton" class="large-menu-button">部屋に参加する</button>
+            <button type="button" id="showRulesButton" class="ghost">ルールを見る</button>
+            <div class="rules-box hidden" id="rulesBox">
+              秘密ランクに合う単語を出して、みんなでランクを当てます。連続正解でクリアです。
+            </div>
           </div>
-          <div class="button-row">
-            <button type="button" id="createRoomButton" class="primary">部屋を作る</button>
-            <button type="button" id="refreshRoomsButton">部屋一覧</button>
+          <div class="online-screen hidden" data-online-screen="create">
+            <div class="screen-title-row">
+              <strong>部屋を作る</strong>
+              <button type="button" class="ghost small-button" data-online-back>戻る</button>
+            </div>
+            <label>
+              <span>名前</span>
+              <input id="username" maxlength="12" placeholder="名前を入力" />
+            </label>
+            <div class="grid-2">
+              <label>
+                <span>最大人数</span>
+                <select id="roomCapacity">
+                  <option value="2">2人</option>
+                  <option value="3">3人</option>
+                  <option value="4" selected>4人</option>
+                  <option value="6">6人</option>
+                  <option value="8">8人</option>
+                </select>
+              </label>
+              <label>
+                <span>公開範囲</span>
+                <select id="roomPermission">
+                  <option value="0" selected>公開</option>
+                  <option value="1">非公開</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" id="createRoomButton" class="primary large-menu-button">部屋を作成</button>
           </div>
-          <div class="join-row">
-            <input id="joinRoomInput" maxlength="32" placeholder="部屋ID" />
-            <button type="button" id="joinRoomButton">入室</button>
+          <div class="online-screen hidden" data-online-screen="join">
+            <div class="screen-title-row">
+              <strong>部屋に参加する</strong>
+              <button type="button" class="ghost small-button" data-online-back>戻る</button>
+            </div>
+            <label>
+              <span>名前</span>
+              <input id="usernameJoin" maxlength="12" placeholder="名前を入力" />
+            </label>
+            <div class="join-row">
+              <input id="joinRoomInput" maxlength="32" placeholder="ルームID" />
+              <button type="button" id="joinRoomButton">参加</button>
+            </div>
+            <div class="room-list-title">公開ルーム</div>
+            <button type="button" id="refreshRoomsButton">更新</button>
+            <div id="roomList" class="room-list"></div>
           </div>
           <div id="onlineStatus" class="online-status">オフライン</div>
-          <div class="room-list-title">公開ルーム</div>
-          <div id="roomList" class="room-list"></div>
+        </section>
+        <section class="old-online-panel" hidden>
+          <label>
+            <span>名前</span>
+            <input id="usernameOld" maxlength="12" placeholder="名前を入力" />
+          </label>
         </section>
       </form>
     </template>

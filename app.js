@@ -574,14 +574,17 @@ window.TierGame = {
   applyRemoteAction,
   getPlayerName() {
     const input = document.querySelector("#username");
-    return (input && input.value.trim()) || "Player";
+    const joinInput = document.querySelector("#usernameJoin");
+    return (input && input.value.trim()) || (joinInput && joinInput.value.trim()) || "Player";
   },
   setPlayerName(name, icon) {
     const safeName = (name || "名無し").slice(0, 12);
     const input = document.querySelector("#username");
+    const joinInput = document.querySelector("#usernameJoin");
     const display = document.querySelector("#displayUsername");
     const avatar = document.querySelector("#profileAvatar");
     if (input) input.value = safeName;
+    if (joinInput) joinInput.value = safeName;
     if (display) display.textContent = safeName;
     if (avatar) {
       avatar.innerHTML = "";
