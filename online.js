@@ -20,6 +20,7 @@
     bound: false,
     statusMessage: "",
     lastBridgeEvent: "",
+    participants: [],
 
     isHost() {
       return this.online && this.host;
@@ -34,6 +35,7 @@
       const createButton = document.querySelector("#createRoomButton");
       const refreshButton = document.querySelector("#refreshRoomsButton");
       const joinButton = document.querySelector("#joinRoomButton");
+      const exitButton = document.querySelector("#exitRoomButton");
 
       if (nameInput && !nameInput.dataset.boundOnline) {
         nameInput.dataset.boundOnline = "1";
@@ -57,8 +59,13 @@
           this.joinRoom(input ? input.value.trim() : "");
         });
       }
+      if (exitButton && !exitButton.dataset.boundOnline) {
+        exitButton.dataset.boundOnline = "1";
+        exitButton.addEventListener("click", () => this.exitRoom());
+      }
       this.refreshProfile();
       this.refreshStatus();
+      this.renderRoomUi();
     },
 
     refreshProfile() {
@@ -91,6 +98,62 @@
       }
       if (el) el.textContent = message;
       if (badge) badge.textContent = message;
+      this.renderRoomUi();
+    },
+
+    renderRoomUi() {
+      document.body.dataset.online = this.online ? "connected" : "lobby";
+      const panel = document.querySelector("#roomPanel");
+      const roomId = document.querySelector("#activeRoomId");
+      if (panel) panel.classList.toggle("hidden", !this.online);
+      if (roomId) roomId.textContent = this.roomId ? String(this.roomId).slice(-5) : "未入室";
+      this.renderParticipants();
+    },
+
+    renderParticipants() {
+      const list = document.querySelector("#participantList");
+      if (!list) return;
+      list.innerHTML = "";
+      const members = this.participants.length ? this.participants : [{ id: "self", name: this.localPlayerName, icon: this.localPlayerIcon }];
+      members.forEach((member) => {
+        const chip = document.createElement("div");
+        chip.className = "participant-chip";
+        if (member.icon) {
+          const img = document.createElement("img");
+          img.src = member.icon;
+          img.alt = member.name || "player";
+          chip.append(img);
+        } else {
+          const initial = document.createElement("span");
+          initial.className = "participant-initial";
+          initial.textContent = (member.name || "名").slice(0, 1);
+          chip.append(initial);
+        }
+        const name = document.createElement("span");
+        name.textContent = member.name || "Player";
+        chip.append(name);
+        list.append(chip);
+      });
+    },
+
+    setParticipants(players) {
+      const normalized = (players || []).map((player, index) => this.normalizeParticipant(player, index)).filter(Boolean);
+      const self = this.normalizeParticipant({
+        id: "self",
+        name: this.localPlayerName,
+        icon: this.localPlayerIcon
+      }, -1);
+      const withoutSelf = normalized.filter((player) => player.id !== self.id && player.name !== self.name);
+      this.participants = [self, ...withoutSelf];
+      this.renderParticipants();
+    },
+
+    normalizeParticipant(raw, index) {
+      if (!raw || typeof raw !== "object") return null;
+      const name = raw.name || raw.nickname || raw.user_name || raw.userName || raw.nick_name || raw.player_name || `Player${index + 1}`;
+      const icon = raw.portrait || raw.avatar || raw.icon || raw.head_img || raw.headimgurl || raw.profile_image || raw.profileImage || null;
+      const id = raw.id || raw.user_id || raw.userId || raw.open_id || raw.openId || name;
+      return { id: String(id), name: String(name), icon };
     },
 
     makeHostPeerId(roomId) {
@@ -236,17 +299,20 @@
       this.statusMessage = "";
       this.refreshStatus("Gravityで部屋を作成中...");
       try {
+        const capacity = Math.max(2, Number(document.querySelector("#roomCapacity")?.value || 4));
+        const permission = Number(document.querySelector("#roomPermission")?.value || 0);
         const res = await this.callGravityRoomSDK("create_room", {
           room_type: ROOM_TYPE,
-          max_players: 8,
-          maxplayers: 8,
-          room_permission: 0,
-          permission: 0
+          max_players: capacity,
+          maxplayers: capacity,
+          room_permission: permission,
+          permission
         });
         const roomData = (res && res.data) || res || {};
         this.roomId = roomData.room_id || roomData.roomId;
         if (!this.roomId) throw new Error(`room_idが返ってきません: ${JSON.stringify(res)}`);
         this.startHostPeer(this.roomId);
+        this.setParticipants([]);
         this.statusMessage = "";
         this.refreshStatus();
       } catch (error) {
@@ -269,8 +335,9 @@
       this.refreshStatus("Gravityで入室中...");
       try {
         if (rid.length <= 10) rid = await this.findFullRoomId(rid);
-        await this.callGravityRoomSDK("join_room", { room_id: rid });
+        const joinResult = await this.callGravityRoomSDK("join_room", { room_id: rid });
         this.roomId = rid;
+        this.setParticipants(this.extractPlayers(joinResult));
         this.startGuestPeer(rid);
         this.statusMessage = "";
         this.refreshStatus();
@@ -296,12 +363,13 @@
           const roomId = String(room.room_id || room.roomId || room.id || "");
           const count = room.gamer_num || room.current_players || room.player_count || room.online_users || room.user_count || 0;
           const max = room.max_players || room.max_user_count || 8;
+          const created = this.formatRoomTime(room.create_time || room.created_at || room.createTime || room.createdAt);
           const card = document.createElement("div");
           card.className = "room-card";
           card.innerHTML = `
             <div>
               <div class="room-title">部屋ID: ${roomId.slice(-5)}</div>
-              <div class="room-meta">${count}/${max}人</div>
+              <div class="room-meta">${count}/${max}人 / ${created}</div>
             </div>
           `;
           const join = document.createElement("button");
@@ -341,6 +409,37 @@
         if (Number.isNaN(date.getTime())) return true;
         return now - date.getTime() < tenMinutes;
       });
+    },
+
+    formatRoomTime(value) {
+      if (!value) return "作成時刻不明";
+      let date = new Date(value);
+      if (date.getFullYear() < 2000) date = new Date(value * 1000);
+      if (Number.isNaN(date.getTime())) return "作成時刻不明";
+      const pad = (num) => String(num).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    },
+
+    extractPlayers(result) {
+      const data = (result && result.data) || result || {};
+      return data.players || data.player_list || data.gamers || data.user_list || data.users || data.list || [];
+    },
+
+    async exitRoom() {
+      this.refreshStatus("退出中...");
+      try {
+        await this.callGravityRoomSDK("exit", {});
+      } catch (error) {
+        console.warn("[TierOnline] exit failed:", error);
+      }
+      this.online = false;
+      this.host = true;
+      this.roomId = null;
+      this.statusMessage = "";
+      this.participants = [];
+      this.stopRealtime();
+      this.refreshStatus("ロビーに戻りました");
+      this.fetchRoomList();
     },
 
     async findFullRoomId(shortId) {
@@ -402,11 +501,16 @@
         const urlName = params.get("username");
         const rawIcon = params.get("portrait") || params.get("avatar") || params.get("icon") || params.get("head_img") || params.get("headimgurl");
         const autoRoomId = params.get("room_id") || params.get("roomid");
-        if (autoRoomId) setTimeout(() => this.joinRoom(autoRoomId), 300);
+        if (autoRoomId) {
+          this.fillRoomId(autoRoomId);
+          setTimeout(() => this.joinRoom(autoRoomId), 300);
+        }
         if (urlName) {
           this.localPlayerName = urlName;
           this.localPlayerIcon = rawIcon ? decodeURIComponent(rawIcon) : null;
           window.TierGame.setPlayerName(this.localPlayerName, this.localPlayerIcon);
+          this.initRoomIdInput();
+          this.registerReceiveMessage();
           return;
         }
       } catch {}
@@ -433,6 +537,71 @@
       } catch (error) {
         console.warn("[TierOnline] Gravity user load failed:", error);
         this.refreshStatus(`ユーザー取得失敗: ${this.errorText(error)}`);
+      }
+      this.initRoomIdInput();
+      this.registerReceiveMessage();
+    },
+
+    async initRoomIdInput() {
+      try {
+        if (window.AgentSDK && window.AgentSDK.room && typeof window.AgentSDK.room.getRoomId === "function") {
+          const result = await window.AgentSDK.room.getRoomId();
+          const roomId = result && (result.room_id || result.roomId || result.data?.room_id || result.data?.roomId || result.data);
+          if (roomId) this.fillRoomId(roomId);
+        }
+      } catch (error) {
+        console.warn("[TierOnline] getRoomId direct failed:", error);
+      }
+    },
+
+    fillRoomId(roomId) {
+      const input = document.querySelector("#joinRoomInput");
+      if (input && roomId) input.value = String(roomId).slice(-5);
+    },
+
+    registerReceiveMessage() {
+      try {
+        if (window.AgentSDK && window.AgentSDK.room && typeof window.AgentSDK.room.receiveMessage === "function") {
+          window.AgentSDK.room.receiveMessage((payload) => this.handleRoomEvent(payload));
+        }
+      } catch (error) {
+        console.warn("[TierOnline] receiveMessage register failed:", error);
+      }
+    },
+
+    handleRoomEvent(eventPayload) {
+      const payload = eventPayload && (eventPayload.payload || eventPayload);
+      if (!payload || typeof payload !== "object") return;
+      const type = payload.type;
+      const data = payload.data || {};
+      if (type === "aitools_game_joinroom" || type === "aitoolsgamejoinroom") {
+        const joined = this.normalizeParticipant(data, this.participants.length);
+        if (joined && !this.participants.some((item) => item.id === joined.id || item.name === joined.name)) {
+          this.participants.push(joined);
+          this.renderParticipants();
+        }
+        this.refreshStatus(`${joined ? joined.name : "プレイヤー"}が入室しました`);
+        return;
+      }
+      if (type === "aitools_game_exitroom" || type === "aitoolsgameexitroom") {
+        const leaving = this.normalizeParticipant(data, 0);
+        if (leaving) {
+          this.participants = this.participants.filter((item) => item.id !== leaving.id && item.name !== leaving.name);
+          this.renderParticipants();
+        }
+        this.refreshStatus(`${leaving ? leaving.name : "プレイヤー"}が退出しました`);
+        return;
+      }
+      if (type === "aitools_game_sendmsg" || type === "aitoolsgamesendmsg") {
+        try {
+          let message = data.msg_data || data.message || payload.message;
+          if (typeof message === "string") message = JSON.parse(message);
+          if (typeof message === "string") message = JSON.parse(message);
+          if (message && message.type === "state") window.TierGame.importState(message.state || message.data || message);
+          if (message && message.type === "action" && this.host) window.TierGame.applyRemoteAction(message.action);
+        } catch (error) {
+          console.warn("[TierOnline] sendmsg parse failed:", error);
+        }
       }
     },
 
@@ -493,6 +662,10 @@
         req.resolve(result);
       }
       delete online.gravityRoomRequests[responseId];
+    }
+
+    if (data.type === "gravityroomevent" || data.type === "gravity_room_event") {
+      online.handleRoomEvent(data.payload || data);
     }
   });
 

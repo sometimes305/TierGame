@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Tier Sense</title>
     <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
   <body>
@@ -56,6 +57,18 @@
           <div id="panelBody"></div>
         </aside>
       </main>
+
+      <section class="room-panel hidden" id="roomPanel" aria-label="ルーム情報">
+        <div>
+          <p class="label">ルーム</p>
+          <strong id="activeRoomId">未入室</strong>
+        </div>
+        <div>
+          <p class="label">参加者</p>
+          <div class="participant-list" id="participantList"></div>
+        </div>
+        <button type="button" class="danger" id="exitRoomButton">退出</button>
+      </section>
     </div>
 
     <template id="setupTemplate">
@@ -109,6 +122,25 @@
             <span>名前</span>
             <input id="username" maxlength="12" placeholder="名前を入力" />
           </label>
+          <div class="grid-2">
+            <label>
+              <span>最大人数</span>
+              <select id="roomCapacity">
+                <option value="2">2人</option>
+                <option value="3">3人</option>
+                <option value="4" selected>4人</option>
+                <option value="6">6人</option>
+                <option value="8">8人</option>
+              </select>
+            </label>
+            <label>
+              <span>公開範囲</span>
+              <select id="roomPermission">
+                <option value="0" selected>公開</option>
+                <option value="1">非公開</option>
+              </select>
+            </label>
+          </div>
           <div class="button-row">
             <button type="button" id="createRoomButton" class="primary">部屋を作る</button>
             <button type="button" id="refreshRoomsButton">部屋一覧</button>
@@ -118,6 +150,7 @@
             <button type="button" id="joinRoomButton">入室</button>
           </div>
           <div id="onlineStatus" class="online-status">オフライン</div>
+          <div class="room-list-title">公開ルーム</div>
           <div id="roomList" class="room-list"></div>
         </section>
       </form>
