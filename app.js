@@ -99,6 +99,15 @@ function renderBoard() {
   for (const rank of state.unlockedRanks) {
     const row = document.createElement("div");
     row.className = "tier-row";
+    const canSelectRank = state.phase === "judgement" && canCurrentPlayerJudge() && !state.eliminatedRanks.includes(rank);
+    row.classList.toggle("selectable", canSelectRank);
+    row.classList.toggle("selected", state.selectedRank === rank);
+    if (canSelectRank) {
+      row.addEventListener("click", () => {
+        state.selectedRank = rank;
+        render();
+      });
+    }
 
     const rankCell = document.createElement("div");
     rankCell.className = `rank-cell rank-${rank}`;
@@ -155,131 +164,131 @@ function renderPanel() {
 
   if (state.phase === "secret") {
     const canView = canCurrentPlayerViewSecret();
-    els.panelBody.append(
-      createStack([
-        createSecretBox(canView),
-        metaBox("今回の回答者", state.answererName || "未定"),
-        createButtonRow([
-          button(state.secretVisible ? "隠す" : "秘密ランクを見る", () => {
+    const children = [
+      playBar(
+        canView ? "あなたが回答者です。秘密ランクを確認してください。" : `${state.answererName || "回答者"}さんが秘密ランクを確認しています...`,
+        [
+          button(state.secretVisible ? "隠す" : "秘密を見る", () => {
             state.secretVisible = !state.secretVisible;
             render();
           }, "primary", "button", !canView),
-          button("回答入力へ", () => {
+          button("入力へ", () => {
             if (sendRemoteAction("goAnswer")) return;
             state.secretVisible = false;
             state.phase = "answer";
             saveGame();
             render();
           }, "", "button", !canView)
-        ]),
-        note(canView ? "あなたが回答者です。確認したら隠して、単語入力へ進んでください。" : "回答者が秘密ランクを確認しています。ほかの人は見ないまま待ちます。")
-      ])
-    );
-    return;
-  }
-
-  if (state.phase === "answer") {
-    if (!canCurrentPlayerViewSecret()) {
-      els.panelBody.append(
-        createStack([
-          metaBox("回答待ち", `${state.answererName || "回答者"}さんが回答を考えています...`),
-          note("単語が公開されるまで少し待ってください。")
-        ])
-      );
-      return;
-    }
-    const form = document.createElement("form");
-    form.className = "stack";
-    form.innerHTML = `
-      <label>
-        <span>回答単語</span>
-        <input id="answerInput" maxlength="20" placeholder="例: ワニ" required />
-      </label>
-    `;
-    const row = createButtonRow([
-      button("回答確定", null, "primary", "submit"),
-      button("秘密へ戻る", () => {
-        state.phase = "secret";
-        render();
-      }, "ghost", "button")
-    ]);
-    form.append(row);
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const answer = form.querySelector("#answerInput").value.trim();
-      if (!answer) return;
-      if (sendRemoteAction("submitAnswer", { answer })) return;
-      state.currentAnswer = answer;
-      state.phase = "discussion";
-      saveGame();
-      render();
-    });
-    els.panelBody.append(form);
-    return;
-  }
-
-  if (state.phase === "discussion") {
-    const children = [
-      answerBox(),
-      createHintBox(),
-      createButtonRow([
-        button("ヒントを使う", useHint, "ghost", "button", !canUseHint()),
-        button("オーナー判定へ", () => {
-          if (sendRemoteAction("goJudgement")) return;
-          state.phase = "judgement";
-          saveGame();
-          render();
-        }, "primary", "button", !canCurrentPlayerJudge())
-      ])
+        ]
+      )
     ];
+    if (canView && state.secretVisible) {
+      children.push(createModal("秘密ランク", [createSecretBox(true)], [
+        button("隠す", () => {
+          state.secretVisible = false;
+          render();
+        }, "primary")
+      ]));
+    }
     els.panelBody.append(createStack(children));
     return;
   }
 
-  if (state.phase === "judgement") {
-    const picker = document.createElement("div");
-    picker.className = "rank-picker";
-    for (const rank of state.unlockedRanks) {
-      const selected = state.selectedRank === rank ? " selected" : "";
-      picker.append(button(rank, () => {
-        state.selectedRank = rank;
+  if (state.phase === "answer") {
+    const canAnswer = canCurrentPlayerViewSecret();
+    const children = [
+      playBar(
+        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${state.answererName || "回答者"}さんが回答を考えています...`,
+        []
+      )
+    ];
+    if (canAnswer) {
+      const form = document.createElement("form");
+      form.className = "stack";
+      form.innerHTML = `
+        <label>
+          <span>回答単語</span>
+          <input id="answerInput" maxlength="20" placeholder="例: ワニ" required />
+        </label>
+      `;
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const answer = form.querySelector("#answerInput").value.trim();
+        if (!answer) return;
+        if (sendRemoteAction("submitAnswer", { answer })) return;
+        state.currentAnswer = answer;
+        state.phase = "discussion";
+        saveGame();
         render();
-      }, `rank-button rank-${rank}${selected}`, "button", state.eliminatedRanks.includes(rank) || !canCurrentPlayerJudge()));
+      });
+      children.push(createModal("単語入力", [metaBox("狙うランク", state.currentSecretRank), form], [
+        button("戻る", () => {
+          state.phase = "secret";
+          render();
+        }, "ghost"),
+        button("OK", () => form.requestSubmit(), "primary")
+      ]));
     }
+    els.panelBody.append(createStack(children));
+    return;
+  }
 
+  if (state.phase === "discussion") {
     els.panelBody.append(
-      createStack([
-        answerBox(),
-        picker,
-        createButtonRow([
+      playBar(
+        `回答「${state.currentAnswer}」のランクを相談中...`,
+        [
+          button("ヒント", useHint, "ghost", "button", !canUseHint()),
+          button("回答する", () => {
+            if (sendRemoteAction("goJudgement")) return;
+            state.phase = "judgement";
+            saveGame();
+            render();
+          }, "primary", "button", !canCurrentPlayerJudge())
+        ],
+        [`ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
+      )
+    );
+    return;
+  }
+
+  if (state.phase === "judgement") {
+    const children = [
+      playBar(
+        state.selectedRank ? `${state.selectedRank}に決定しますか？` : "回答者がランクを選択中...",
+        [
           button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank || !canCurrentPlayerJudge()),
-          button("相談に戻る", () => {
+          button("戻る", () => {
             state.phase = "discussion";
             render();
-          })
-        ])
-      ])
-    );
+          }, "ghost", "button", !canCurrentPlayerJudge())
+        ],
+        [`ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
+      )
+    ];
+    if (canCurrentPlayerJudge()) {
+      children.push(createModal("回答入力", [metaBox("回答", state.currentAnswer), createRankPicker()], [
+        button("キャンセル", () => {
+          state.phase = "discussion";
+          render();
+        }, "ghost"),
+        button("OK", () => judge(state.selectedRank), "primary", "button", !state.selectedRank)
+      ]));
+    }
+    els.panelBody.append(createStack(children));
     return;
   }
 
   if (state.phase === "result") {
     const result = state.lastResult;
-    const resultBox = document.createElement("div");
-    resultBox.className = "result-box";
-    resultBox.innerHTML = `
-      <p class="${result.success ? "success" : "failure"}"><strong>${result.success ? "正解" : "不正解"}</strong></p>
-      <p>回答: <span class="answer-word">${escapeHtml(result.answer)}</span></p>
-      <p>秘密ランク: <strong>${result.secretRank}</strong> / 判定: <strong>${result.judgedRank}</strong></p>
-    `;
-
     els.panelBody.append(
       createStack([
-        resultBox,
-        createButtonRow([
-          button("次のラウンド", nextRound, "primary"),
-          button("保存", saveGame),
+        playBar("次の行動を決めてください。", [
+          button("次へ", nextRound, "primary"),
           button("リセット", resetGame, "danger")
+        ], [`ワード数 ${countWords()} / 50`]),
+        createModal("回答結果", [resultPanel(result)], [
+          button("次へ", nextRound, "primary")
         ])
       ])
     );
@@ -289,10 +298,13 @@ function renderPanel() {
   if (state.phase === "clear") {
     els.panelBody.append(
       createStack([
-        resultMessage("clear", `クリア。${state.goalStreak}連続正解に到達しました。`),
-        createButtonRow([
-          button("同じお題でもう一度", restartKeepingBoard, "primary"),
-          button("最初から", resetGame)
+        playBar("クリアしました。", [
+          button("まだ続ける", restartKeepingBoard, "primary"),
+          button("設定へ", resetGame, "danger")
+        ], [`ワード数 ${countWords()} / 50`]),
+        createModal("WIN!", [resultMessage("clear", `${state.goalStreak}連続正解に到達しました。`)], [
+          button("まだ続ける", restartKeepingBoard, "primary"),
+          button("設定へ", resetGame, "danger")
         ])
       ])
     );
@@ -351,12 +363,13 @@ function judge(rank) {
   state.judgedRank = rank;
   state.streak = success ? state.streak + 1 : 0;
   addWord(rank, state.currentAnswer, state.round);
-  unlockOuterRanks(rank);
+  const unlockedRanks = unlockOuterRanks(rank);
   state.lastResult = {
     success,
     answer: state.currentAnswer,
     secretRank: state.currentSecretRank,
-    judgedRank: rank
+    judgedRank: rank,
+    unlockedRanks
   };
   state.phase = state.streak >= state.goalStreak ? "clear" : "result";
   saveGame();
@@ -369,20 +382,27 @@ function addWord(rank, word, turn = state.round) {
 }
 
 function unlockOuterRanks(rank) {
+  const unlocked = [];
   const currentIndexes = state.unlockedRanks.map((item) => ALL_RANKS.indexOf(item));
   const min = Math.min(...currentIndexes);
   const max = Math.max(...currentIndexes);
   const index = ALL_RANKS.indexOf(rank);
 
-  if (index === min && min > 0) unlockRank(ALL_RANKS[min - 1]);
-  if (index === max && max < ALL_RANKS.length - 1) unlockRank(ALL_RANKS[max + 1]);
+  if (index === min && min > 0) unlocked.push(unlockRank(ALL_RANKS[min - 1]));
+  if (index === max && max < ALL_RANKS.length - 1) unlocked.push(unlockRank(ALL_RANKS[max + 1]));
 
   state.unlockedRanks.sort((a, b) => ALL_RANKS.indexOf(a) - ALL_RANKS.indexOf(b));
+  return unlocked.filter(Boolean);
 }
 
 function unlockRank(rank) {
-  if (!state.unlockedRanks.includes(rank)) state.unlockedRanks.push(rank);
+  if (!state.unlockedRanks.includes(rank)) {
+    state.unlockedRanks.push(rank);
+    if (!state.tierTable[rank]) state.tierTable[rank] = [];
+    return rank;
+  }
   if (!state.tierTable[rank]) state.tierTable[rank] = [];
+  return "";
 }
 
 function nextRound() {
@@ -547,6 +567,71 @@ function answerBox() {
   return box;
 }
 
+function playBar(message, buttons = [], meta = []) {
+  const box = document.createElement("div");
+  box.className = "play-bar";
+  const status = document.createElement("div");
+  status.className = "play-status";
+  status.textContent = message;
+  const actions = document.createElement("div");
+  actions.className = "play-actions";
+  for (const item of buttons) actions.append(item);
+  const metaLine = document.createElement("div");
+  metaLine.className = "play-meta";
+  metaLine.textContent = meta.join(" / ");
+  box.append(status, actions, metaLine);
+  return box;
+}
+
+function createModal(title, children, actions = []) {
+  const overlay = document.createElement("div");
+  overlay.className = "game-modal-overlay";
+  const modal = document.createElement("section");
+  modal.className = "game-modal";
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  const body = document.createElement("div");
+  body.className = "game-modal-body";
+  for (const child of children) body.append(child);
+  const footer = document.createElement("div");
+  footer.className = "game-modal-actions";
+  for (const item of actions) footer.append(item);
+  modal.append(heading, body, footer);
+  overlay.append(modal);
+  return overlay;
+}
+
+function createRankPicker() {
+  const picker = document.createElement("div");
+  picker.className = "rank-picker modal-rank-picker";
+  for (const rank of state.unlockedRanks) {
+    const selected = state.selectedRank === rank ? " selected" : "";
+    picker.append(button(rank, () => {
+      state.selectedRank = rank;
+      render();
+    }, `rank-button rank-${rank}${selected}`, "button", state.eliminatedRanks.includes(rank) || !canCurrentPlayerJudge()));
+  }
+  return picker;
+}
+
+function resultPanel(result) {
+  const box = document.createElement("div");
+  box.className = "result-panel";
+  const remaining = Math.max(0, state.goalStreak - state.streak);
+  const unlocked = result.unlockedRanks && result.unlockedRanks.length
+    ? `<p class="unlock-note">新ランク ${result.unlockedRanks.join(" / ")} が解放されました。</p>`
+    : "";
+  box.innerHTML = `
+    <div class="result-stamp ${result.success ? "success" : "failure"}">${result.success ? "正解" : "不正解"}</div>
+    <p class="answer-word">${escapeHtml(result.answer)}</p>
+    <p>正解ランク <strong>${result.secretRank}</strong></p>
+    <p>回答ランク <strong>${result.judgedRank}</strong></p>
+    <p>クリアまであと <strong>${remaining}</strong> 連続正解</p>
+    ${unlocked}
+  `;
+  return box;
+}
+
 function metaBox(label, value) {
   const box = document.createElement("div");
   box.className = "result-box compact-box";
@@ -559,6 +644,10 @@ function canUseHint() {
     (rank) => rank !== state.currentSecretRank && !state.eliminatedRanks.includes(rank)
   );
   return state.remainingHints > 0 && candidates.length > 0;
+}
+
+function countWords() {
+  return Object.values(state.tierTable).reduce((sum, words) => sum + (Array.isArray(words) ? words.length : 0), 0);
 }
 
 function canCurrentPlayerViewSecret() {
