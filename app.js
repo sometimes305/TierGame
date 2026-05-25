@@ -312,6 +312,10 @@ function renderPanel() {
 }
 
 function startGame(settings) {
+  if (!canStartGame()) {
+    render();
+    return;
+  }
   const resolved = resolveSetup(settings);
   if (sendRemoteAction("startGame", resolved)) return;
   state = createInitialState();
@@ -461,14 +465,38 @@ function getParticipantNames() {
   return names.length ? names : ["Player"];
 }
 
-function pickInitialAnswerer(settings) {
+function getAnswererCandidateNames() {
   const names = getParticipantNames();
+  const online = window.TierOnline;
+  if (!online || !online.online || !online.host || names.length <= 1) return names;
+  const hostName = online.localPlayerName || (window.TierGame ? window.TierGame.getPlayerName() : "");
+  const guests = names.filter((name) => normalizeName(name) !== normalizeName(hostName));
+  return guests.length ? guests : names;
+}
+
+function pickInitialAnswerer(settings) {
+  const names = getAnswererCandidateNames();
   state.answererIndex = Math.floor(Math.random() * names.length);
   return names[state.answererIndex];
 }
 
+function canStartGame() {
+  const online = window.TierOnline;
+  if (!online || !online.online) return true;
+  if (!online.isHost()) return false;
+  return getParticipantNames().length >= 2 && getAnswererCandidateNames().length >= 1;
+}
+
+function startBlockedReason() {
+  const online = window.TierOnline;
+  if (!online || !online.online) return "";
+  if (!online.isHost()) return "ホストの開始待ち";
+  if (getParticipantNames().length < 2) return "参加者が2人以上になるまで開始できません";
+  return "";
+}
+
 function rotateAnswerer() {
-  const names = getParticipantNames();
+  const names = getAnswererCandidateNames();
   if (!names.length) return;
   const current = names.indexOf(state.answererName);
   state.answererIndex = current >= 0 ? current + 1 : state.answererIndex + 1;
@@ -871,7 +899,9 @@ function applySetupRoleUi(root) {
 
   if (isHost) {
     if (status) status.textContent = "あなたがホストです。ルールを設定してゲームを開始できます。";
-    if (startButton) startButton.disabled = false;
+    const blockedReason = startBlockedReason();
+    if (status && blockedReason) status.textContent = blockedReason;
+    if (startButton) startButton.disabled = !canStartGame();
     controls.forEach((control) => (control.disabled = false));
     controls.forEach((control) => {
       if (control.dataset.boundConfigSync) return;

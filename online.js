@@ -181,6 +181,12 @@
       });
     },
 
+    notifyParticipantsChanged() {
+      if (window.TierGame && typeof window.TierGame.refresh === "function") {
+        window.TierGame.refresh();
+      }
+    },
+
     setParticipants(players) {
       const normalized = (players || []).map((player, index) => this.normalizeParticipant(player, index)).filter(Boolean);
       const self = this.normalizeParticipant({
@@ -191,6 +197,7 @@
       const withoutSelf = normalized.filter((player) => player.id !== self.id && player.name !== self.name);
       this.participants = [self, ...withoutSelf];
       this.renderParticipants();
+      this.notifyParticipantsChanged();
     },
 
     upsertParticipant(player) {
@@ -203,6 +210,7 @@
         this.participants.push(normalized);
       }
       this.renderParticipants();
+      this.notifyParticipantsChanged();
     },
 
     normalizeParticipant(raw, index) {
@@ -270,6 +278,7 @@
           if (conn._playerName) {
             this.participants = this.participants.filter((item) => item.name !== conn._playerName && item.id !== conn.peer);
             this.renderParticipants();
+            this.notifyParticipantsChanged();
           }
           this.refreshStatus(`${conn._playerName || "プレイヤー"}が退出しました`);
         });
@@ -670,6 +679,7 @@
         if (joined && !this.participants.some((item) => item.id === joined.id || item.name === joined.name)) {
           this.participants.push(joined);
           this.renderParticipants();
+          this.notifyParticipantsChanged();
         }
         this.refreshStatus(`${joined ? joined.name : "プレイヤー"}が入室しました`);
         return;
@@ -679,6 +689,7 @@
         if (leaving) {
           this.participants = this.participants.filter((item) => item.id !== leaving.id && item.name !== leaving.name);
           this.renderParticipants();
+          this.notifyParticipantsChanged();
         }
         this.refreshStatus(`${leaving ? leaving.name : "プレイヤー"}が退出しました`);
         return;
