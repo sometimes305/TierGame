@@ -101,6 +101,7 @@ select {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .room-list {

@@ -1,7 +1,7 @@
 (function () {
   const ROOM_TYPE = "aitools_game_room";
   const PEER_PREFIX = "tier_sense_rt_";
-  const SDK_TIMEOUT_MS = 10000;
+  const SDK_TIMEOUT_MS = 30000;
 
   const online = {
     isGravity: window.self !== window.top || new URLSearchParams(window.location.search).has("username") || new URLSearchParams(window.location.search).has("room_id") || new URLSearchParams(window.location.search).has("roomid"),
@@ -18,6 +18,8 @@
     online: false,
     host: true,
     bound: false,
+    statusMessage: "",
+    lastBridgeEvent: "",
 
     isHost() {
       return this.online && this.host;
@@ -71,6 +73,13 @@
       let message = "";
       if (text) {
         message = text;
+        this.statusMessage = text;
+        if (el) el.textContent = message;
+        if (badge) badge.textContent = message;
+        return;
+      }
+      if (this.statusMessage) {
+        message = this.statusMessage;
         if (el) el.textContent = message;
         if (badge) badge.textContent = message;
         return;
@@ -224,6 +233,7 @@
       this.localPlayerName = window.TierGame.getPlayerName();
       this.host = true;
       this.online = true;
+      this.statusMessage = "";
       this.refreshStatus("Gravityで部屋を作成中...");
       try {
         const res = await this.callGravityRoomSDK("create_room", {
@@ -237,6 +247,7 @@
         this.roomId = roomData.room_id || roomData.roomId;
         if (!this.roomId) throw new Error(`room_idが返ってきません: ${JSON.stringify(res)}`);
         this.startHostPeer(this.roomId);
+        this.statusMessage = "";
         this.refreshStatus();
       } catch (error) {
         console.warn("[TierOnline] create room failed:", error);
@@ -254,12 +265,14 @@
       this.localPlayerName = window.TierGame.getPlayerName();
       this.host = false;
       this.online = true;
+      this.statusMessage = "";
       this.refreshStatus("Gravityで入室中...");
       try {
         if (rid.length <= 10) rid = await this.findFullRoomId(rid);
         await this.callGravityRoomSDK("join_room", { room_id: rid });
         this.roomId = rid;
         this.startGuestPeer(rid);
+        this.statusMessage = "";
         this.refreshStatus();
       } catch (error) {
         console.warn("[TierOnline] join room failed:", error);
@@ -342,15 +355,15 @@
         const requestId = `req_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         const timer = window.setTimeout(() => {
           delete this.gravityRequests[requestId];
-          reject(new Error(`${action} timeout`));
+          reject(new Error(`${action} timeout / last=${this.lastBridgeEvent || "none"}`));
         }, SDK_TIMEOUT_MS);
         this.gravityRequests[requestId] = { resolve, reject, timer };
-        window.top.postMessage({
+        this.postToGravity({
           type: "API",
           action,
           requestId,
           params: params || {}
-        }, "*");
+        });
       });
     },
 
@@ -359,13 +372,28 @@
         const requestId = `${action}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         const timer = window.setTimeout(() => {
           delete this.gravityRoomRequests[requestId];
-          reject(new Error(`${action} timeout`));
+          reject(new Error(`${action} timeout / last=${this.lastBridgeEvent || "none"}`));
         }, SDK_TIMEOUT_MS);
         this.gravityRoomRequests[requestId] = { resolve, reject, timer };
         const message = { action, actionId: requestId, actionld: requestId };
         if (params) Object.assign(message, params);
-        window.parent.postMessage(message, "*");
+        this.postToGravity(message);
       });
+    },
+
+    postToGravity(message) {
+      try {
+        window.parent.postMessage(message, "*");
+      } catch {}
+      try {
+        if (window.top && window.top !== window.parent) window.top.postMessage(message, "*");
+      } catch {}
+      try {
+        if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === "function") {
+          window.ReactNativeWebView.postMessage(JSON.stringify(message));
+        }
+      } catch {}
+      console.log("[TierOnline] postToGravity:", JSON.stringify(message));
     },
 
     async initGravityUser() {
@@ -433,6 +461,8 @@
   window.addEventListener("message", (event) => {
     const data = event.data;
     if (!data || typeof data !== "object") return;
+    online.lastBridgeEvent = data.type || data.action || data.event || JSON.stringify(data).slice(0, 80);
+    console.log("[TierOnline] bridge message:", JSON.stringify(data).slice(0, 500));
 
     if (data.type === "API_CALLBACK" && data.requestId) {
       const req = online.gravityRequests[data.requestId];
@@ -444,12 +474,19 @@
       return;
     }
 
-    const responseId = data.actionId || data.actionld;
-    if ((data.type === "gravityroomresponse" || data.type === "gravity_room_response") && responseId) {
+    const responseId = data.actionId || data.actionld || data.requestId || data.reqId;
+    const isRoomResponse =
+      data.type === "gravityroomresponse" ||
+      data.type === "gravity_room_response" ||
+      data.type === "GRAVITY_ROOM_RESPONSE" ||
+      data.type === "room_response" ||
+      Boolean(responseId && online.gravityRoomRequests[responseId]);
+
+    if (isRoomResponse && responseId) {
       const req = online.gravityRoomRequests[responseId];
       if (!req) return;
       window.clearTimeout(req.timer);
-      const result = data.result || {};
+      const result = data.result || data.payload || data.data || data;
       if (result.errno !== undefined && result.errno !== 0) {
         req.reject(`SDK Error (errno:${result.errno}): ${result.errmsg || "Unknown"}`);
       } else {
