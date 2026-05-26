@@ -516,12 +516,12 @@
       return data.players || data.player_list || data.gamers || data.user_list || data.users || data.list || [];
     },
 
-    async exitRoom() {
+    exitRoom() {
       this.refreshStatus("退出中...");
-      try {
-        await this.callGravityRoomSDK("exit", {});
-      } catch (error) {
-        console.warn("[TierOnline] exit failed:", error);
+      if (this.online || this.roomId) {
+        this.callGravityRoomSDK("exit", {}).catch((error) => {
+          console.warn("[TierOnline] exit failed:", error);
+        });
       }
       this.online = false;
       this.host = true;
@@ -531,6 +531,7 @@
       this.stopRealtime();
       this.refreshStatus("ロビーに戻りました");
       if (window.TierGame.refresh) window.TierGame.refresh();
+      this.showOnlineScreen("home");
       this.fetchRoomList();
     },
 

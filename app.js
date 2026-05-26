@@ -1663,8 +1663,10 @@ function bindSetupFormBehavior(root) {
   const hintInput = root.querySelector("#hintCountInput");
   const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
   let lastAutoRerollAt = 0;
+  const modeValue = () => root.querySelector('[name="topicMode"]:checked')?.value || "auto";
+  const formAllowsEdit = () => canEditSetupControls() || topicModeInputs.some((input) => !input.disabled);
   const syncLocalSetupState = () => {
-    state.topicMode = root.querySelector('[name="topicMode"]:checked')?.value || state.topicMode || "auto";
+    state.topicMode = modeValue() || state.topicMode || "auto";
     state.topic = topicInput ? topicInput.value.trim() : state.topic;
     state.startWord = startWordInput ? startWordInput.value.trim() : state.startWord;
     state.initialRank = initialRankInput ? initialRankInput.value : state.initialRank;
@@ -1683,17 +1685,32 @@ function bindSetupFormBehavior(root) {
     if (initialRankInput) initialRankInput.value = auto.initialRank;
     lastAutoRerollAt = Date.now();
   };
-  const applyMode = () => {
-    const mode = root.querySelector('[name="topicMode"]:checked')?.value || "auto";
-    const auto = mode === "auto";
-    const roleAllowsEdit = canEditSetupControls() || topicModeInputs.some((input) => !input.disabled);
+  const unlockManualFields = () => {
+    if (modeValue() !== "manual" || !formAllowsEdit()) return;
     [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
-      const shouldLockPreview = auto && control.tagName !== "SELECT";
+      control.disabled = false;
+      control.readOnly = false;
+      control.removeAttribute("readonly");
+      control.classList.remove("readonly-preview");
+    });
+  };
+  const applyMode = () => {
+    const mode = modeValue();
+    const auto = mode === "auto";
+    const roleAllowsEdit = formAllowsEdit();
+    [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
+      const isInitialRank = control === initialRankInput;
+      const shouldLockPreview = auto && !isInitialRank;
       control.readOnly = shouldLockPreview;
-      control.toggleAttribute("readonly", shouldLockPreview);
       control.classList.toggle("readonly-preview", auto);
       if (roleAllowsEdit) {
-        control.disabled = control === initialRankInput && auto;
+        control.disabled = isInitialRank && auto;
+        if (shouldLockPreview) {
+          control.setAttribute("readonly", "readonly");
+        } else {
+          control.removeAttribute("readonly");
+          control.readOnly = false;
+        }
       } else {
         control.disabled = true;
       }
@@ -1708,6 +1725,19 @@ function bindSetupFormBehavior(root) {
   topicModeInputs.forEach((input) => {
     if (input.dataset.boundSetupMode) return;
     input.dataset.boundSetupMode = "1";
+    const label = input.closest("label");
+    const prepareMode = () => {
+      if (input.value === "manual" && formAllowsEdit()) {
+        input.checked = true;
+        state.topicMode = "manual";
+        applyMode();
+        unlockManualFields();
+      }
+    };
+    if (label) {
+      label.addEventListener("pointerdown", prepareMode);
+      label.addEventListener("touchstart", prepareMode, { passive: true });
+    }
     input.addEventListener("click", () => {
       setTimeout(() => {
         if (input.value === "auto" && input.checked && canEditSetupControls()) {
@@ -1733,7 +1763,14 @@ function bindSetupFormBehavior(root) {
       syncSetupConfig();
     });
   });
+  [topicInput, startWordInput].filter(Boolean).forEach((control) => {
+    const prepareInput = () => unlockManualFields();
+    control.addEventListener("pointerdown", prepareInput);
+    control.addEventListener("touchstart", prepareInput, { passive: true });
+    control.addEventListener("focus", prepareInput);
+  });
   applyMode();
+  unlockManualFields();
   syncLocalSetupState();
 }
 
