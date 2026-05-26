@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Tier Sense</title>
-    <link rel="stylesheet" href="style.css?v=20260526-answerlock" />
+    <title>みんなでティア表ゲーム</title>
+    <link rel="stylesheet" href="style.css?v=20260526-ui-cleanup" />
     <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
@@ -13,8 +13,7 @@
       <header class="topbar">
         <span class="topbar-spacer" aria-hidden="true"></span>
         <div class="title-block">
-          <p class="eyebrow">Tier Sense</p>
-          <h1 id="headerPhaseDisplay">ロビー</h1>
+          <h1 id="headerPhaseDisplay">みんなでティア表ゲーム</h1>
           <div id="onlineBadge" class="online-badge">オフライン</div>
         </div>
         <button type="button" class="topbar-button" id="helpButton">遊び方</button>
@@ -71,6 +70,9 @@
       </section>
 
       <section class="chat-panel" id="chatPanel" aria-label="チャット">
+        <div class="chat-resize-handle" id="chatResizeHandle" role="separator" aria-label="チャット欄の高さ" aria-orientation="horizontal" tabindex="0">
+          <span></span>
+        </div>
         <div class="chat-log" id="chatLog"></div>
         <form class="chat-form" id="chatForm">
           <input id="chatInput" maxlength="120" placeholder="チャット" autocomplete="off" />
@@ -134,7 +136,6 @@
 
           <div class="button-row">
             <button type="submit" class="primary">ゲーム開始</button>
-            <button type="button" id="loadButton">続きから</button>
           </div>
         </section>
 
@@ -212,7 +213,7 @@
       </form>
     </template>
 
-    <script src="app.js?v=20260526-answerlock"></script>
-    <script src="online.js?v=20260526-answerlock"></script>
+    <script src="app.js?v=20260526-ui-cleanup"></script>
+    <script src="online.js?v=20260526-ui-cleanup"></script>
   </body>
 </html>

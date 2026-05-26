@@ -1,4 +1,6 @@
 const STORAGE_KEY = "tier-sense-state-v1";
+const CHAT_HEIGHT_KEY = "tier-sense-chat-height";
+const GAME_TITLE = "みんなでティア表ゲーム";
 const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
 const AUTO_SETUPS = [
@@ -41,9 +43,11 @@ const els = {
   panelTitle: document.querySelector("#panelTitle"),
   panelBody: document.querySelector("#panelBody"),
   setupTemplate: document.querySelector("#setupTemplate"),
+  chatPanel: document.querySelector("#chatPanel"),
   chatLog: document.querySelector("#chatLog"),
   chatForm: document.querySelector("#chatForm"),
-  chatInput: document.querySelector("#chatInput")
+  chatInput: document.querySelector("#chatInput"),
+  chatResizeHandle: document.querySelector("#chatResizeHandle")
 };
 
 els.help.addEventListener("click", showHowToPlay);
@@ -53,6 +57,7 @@ if (els.chatForm) {
     submitChat();
   });
 }
+initChatResize();
 render();
 
 function createInitialState() {
@@ -102,6 +107,11 @@ function getDisplayPhaseLabel() {
   return PHASE_LABELS[state.phase] || "ロビー";
 }
 
+function getHeaderTitle() {
+  if (state.phase === "setup") return GAME_TITLE;
+  return getDisplayPhaseLabel();
+}
+
 function canDriveGameFlow() {
   return !window.TierOnline || !window.TierOnline.online || window.TierOnline.isHost();
 }
@@ -138,7 +148,7 @@ function render() {
   els.goal.textContent = state.goalStreak;
   els.round.textContent = state.round;
   els.topic.textContent = state.topic || "未設定";
-  els.headerPhase.textContent = getDisplayPhaseLabel();
+  els.headerPhase.textContent = getHeaderTitle();
   els.phase.textContent = getDisplayPhaseLabel();
   els.panelTitle.textContent = getDisplayPhaseLabel();
 
@@ -206,7 +216,6 @@ function renderPanel() {
     fragment.querySelector("#goalInput").value = state.goalStreak;
     fragment.querySelector("#hintCountInput").value = state.hintCount;
     fragment.querySelector(`[name="topicMode"][value="${state.topicMode || "auto"}"]`).checked = true;
-    fragment.querySelector("#loadButton").disabled = !localStorage.getItem(STORAGE_KEY);
     applySetupRoleUi(fragment);
     bindSetupFormBehavior(fragment);
 
@@ -215,7 +224,6 @@ function renderPanel() {
       startGame(readSetupForm(form));
     });
 
-    fragment.querySelector("#loadButton").addEventListener("click", loadGame);
     els.panelBody.append(fragment);
     return;
   }
@@ -353,13 +361,11 @@ function renderPanel() {
   if (state.phase === "clear") {
     els.panelBody.append(
       createStack([
-        playBar("クリアしました。", [
-          button("まだ続ける", restartKeepingBoard, "primary"),
-          button("設定へ", resetGame, "danger")
-        ], [`ワード数 ${countWords()} / 50`]),
-        createModal("WIN!", [resultMessage("clear", `${state.goalStreak}連続正解に到達しました。`)], [
-          button("まだ続ける", restartKeepingBoard, "primary"),
-          button("設定へ", resetGame, "danger")
+        playBar("連続正解達成！ゲームクリアです。", [
+          button("もう一度遊ぶ", resetGame, "primary")
+        ], [`${state.goalStreak}連続正解`, `ワード数 ${countWords()} / 50`]),
+        createModal("CLEAR!", [clearCelebrationPanel()], [
+          button("もう一度遊ぶ", resetGame, "primary")
         ])
       ])
     );
@@ -587,7 +593,30 @@ function rotateTopicSetter() {
 }
 
 function showHowToPlay() {
-  alert("出題者だけが秘密ランクを見て、それに合う単語を入力します。回答者は出題者以外の全員です。回答者は秘密ランクを見ずに相談し、誰か1人が回答画面を開いてランクを選びます。秘密ランクと一致すれば連続正解、不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
+  document.querySelectorAll(".rules-modal-overlay").forEach((node) => node.remove());
+  const content = document.createElement("div");
+  content.className = "rules-dialog";
+  content.innerHTML = `
+    <p>出題者だけが秘密ランクを見て、そのランクに合う単語を入力します。</p>
+    <ol>
+      <li>全員でお題とティア表を見ます。</li>
+      <li>出題者が秘密ランクに合う単語を出します。</li>
+      <li>回答者は出題者以外の全員です。秘密ランクは見えません。</li>
+      <li>相談して、回答者の誰か1人がランクを選びます。</li>
+      <li>秘密ランクと一致すれば連続正解。不一致でも単語はティア表に残ります。</li>
+    </ol>
+    <p>ゴールの連続正解数に届いたらクリアです。</p>
+  `;
+  let dialog = null;
+  const close = () => dialog && dialog.remove();
+  dialog = createModal("遊び方", [content], [
+    button("閉じる", close, "primary")
+  ]);
+  dialog.classList.add("rules-modal-overlay");
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  document.body.append(dialog);
 }
 
 function saveGame() {
@@ -927,6 +956,27 @@ function resultPanel(result) {
   return box;
 }
 
+function clearCelebrationPanel() {
+  const box = document.createElement("div");
+  box.className = "clear-panel";
+  const rings = document.createElement("div");
+  rings.className = "clear-rings";
+  rings.innerHTML = `
+    <span></span>
+    <span></span>
+    <span></span>
+  `;
+  const title = document.createElement("strong");
+  title.textContent = "連続正解達成！";
+  const message = document.createElement("p");
+  message.textContent = `${state.goalStreak}問連続で当てきりました。ティア表、かなり育っています。`;
+  const stats = document.createElement("div");
+  stats.className = "clear-stats";
+  stats.append(metaBox("連続正解", `${state.streak}`), metaBox("登録ワード", `${countWords()}`), metaBox("ラウンド", `${state.round}`));
+  box.append(rings, title, message, stats);
+  return box;
+}
+
 function metaBox(label, value) {
   const box = document.createElement("div");
   box.className = "result-box compact-box";
@@ -1063,6 +1113,51 @@ function appendChat(text, playerName) {
     turn: state.round
   });
   state.chatMessages = state.chatMessages.slice(-80);
+}
+
+function initChatResize() {
+  const panel = els.chatPanel;
+  const handle = els.chatResizeHandle;
+  if (!panel || !handle) return;
+
+  setChatHeight(Number(localStorage.getItem(CHAT_HEIGHT_KEY)) || 154);
+
+  let startY = 0;
+  let startHeight = 0;
+
+  const resize = (clientY) => {
+    const topExclusion = window.innerHeight >= 812 ? 98 : 74;
+    const maxHeight = Math.max(110, window.innerHeight - topExclusion - 22);
+    const nextHeight = clamp(startHeight + (startY - clientY), 110, maxHeight);
+    setChatHeight(nextHeight);
+  };
+
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    startY = event.clientY;
+    startHeight = panel.getBoundingClientRect().height;
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add("resizing-chat");
+  });
+
+  handle.addEventListener("pointermove", (event) => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    resize(event.clientY);
+  });
+
+  const finish = (event) => {
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    document.body.classList.remove("resizing-chat");
+    localStorage.setItem(CHAT_HEIGHT_KEY, String(Math.round(panel.getBoundingClientRect().height)));
+  };
+
+  handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
+}
+
+function setChatHeight(height) {
+  const nextHeight = clamp(Number(height) || 154, 110, Math.max(110, window.innerHeight - 92));
+  document.documentElement.style.setProperty("--chat-height", `${Math.round(nextHeight)}px`);
 }
 
 function renderChat() {
