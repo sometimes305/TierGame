@@ -30,6 +30,7 @@ let state = createInitialState();
 let applyingRemoteState = false;
 let phaseTimer = null;
 let scheduledPhaseKey = "";
+let lastShownHintNoticeId = "";
 
 const els = {
   help: document.querySelector("#helpButton"),
@@ -84,6 +85,7 @@ function createInitialState() {
     judgedRank: "",
     selectedRank: "",
     eliminatedRanks: [],
+    hintNotice: null,
     secretVisible: false,
     unlockedRanks: [...INITIAL_RANKS],
     tierTable: Object.fromEntries(INITIAL_RANKS.map((rank) => [rank, []])),
@@ -159,6 +161,7 @@ function render() {
   if (window.TierOnline && window.TierOnline.bindControls) {
     window.TierOnline.bindControls();
   }
+  showPendingHintNotice();
 }
 
 function renderBoard() {
@@ -170,6 +173,7 @@ function renderBoard() {
     const canSelectRank = state.phase === "judgement" && canCurrentPlayerJudge() && !state.eliminatedRanks.includes(rank);
     row.classList.toggle("selectable", canSelectRank);
     row.classList.toggle("selected", state.selectedRank === rank);
+    row.classList.toggle("eliminated", state.eliminatedRanks.includes(rank));
     if (canSelectRank) {
       row.addEventListener("click", () => {
         state.selectedRank = rank;
@@ -297,7 +301,7 @@ function renderPanel() {
       playBar(
         activeAnswerer ? `${activeAnswerer}が回答中...` : `${answerSummary()} のランクを相談中...`,
         [
-          button("ヒント", useHint, "ghost", "button", !canUseHint()),
+          button("ヒント", showHintConfirmDialog, "ghost", "button", !canUseHint()),
           button(answerButtonText, () => {
             const playerName = getCurrentPlayerName();
             if (sendRemoteAction("beginRankAnswer", { playerName })) return;
@@ -405,23 +409,40 @@ function prepareRound(options = {}) {
   state.judgedRank = "";
   state.selectedRank = "";
   state.eliminatedRanks = [];
+  state.hintNotice = null;
   state.secretVisible = false;
   state.lastResult = null;
   state.phase = options.showGameStart ? "gameStart" : "roundIntro";
 }
 
-function useHint() {
-  if (sendRemoteAction("useHint")) return;
+function requestHintUse(playerName = getCurrentPlayerName()) {
+  if (!canUseHint()) return;
+  if (sendRemoteAction("useHint", { playerName })) return;
+  useHint(playerName);
+}
+
+function useHint(playerName = getCurrentPlayerName()) {
   if (!canUseHint()) return;
 
   const candidates = state.unlockedRanks.filter(
     (rank) => rank !== state.currentSecretRank && !state.eliminatedRanks.includes(rank)
   );
+  const newlyEliminated = [];
   for (let i = 0; i < 2; i += 1) {
     const next = pick(candidates.filter((rank) => !state.eliminatedRanks.includes(rank)));
-    if (next) state.eliminatedRanks.push(next);
+    if (next) {
+      state.eliminatedRanks.push(next);
+      newlyEliminated.push(next);
+    }
   }
+  if (!newlyEliminated.length) return;
   state.remainingHints = Math.max(0, state.remainingHints - 1);
+  state.hintNotice = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    playerName: String(playerName || "Player").slice(0, 12),
+    ranks: newlyEliminated,
+    round: state.round
+  };
   saveGame();
   render();
 }
@@ -706,6 +727,7 @@ function normalizeLoadedState(loaded) {
     text: String(message.text || "").slice(0, 120),
     turn: Math.max(0, Number(message.turn) || 0)
   })).filter((message) => message.text) : [];
+  next.hintNotice = normalizeHintNotice(next.hintNotice, next.round);
   next.answererIndex = Math.max(0, Number(next.answererIndex) || 0);
   next.streak = Math.max(0, Number(next.streak) || 0);
   next.round = Math.max(1, Number(next.round) || 1);
@@ -878,6 +900,76 @@ function createHintBox() {
   }
   box.append(list);
   return box;
+}
+
+function showHintConfirmDialog() {
+  if (!canUseHint()) return;
+  document.querySelectorAll(".hint-confirm-overlay").forEach((node) => node.remove());
+  const content = document.createElement("div");
+  content.className = "hint-dialog";
+  content.innerHTML = `
+    <p><strong>ヒントを1回使いますか？</strong></p>
+    <p>秘密ランクではない候補を最大2つ除外します。残りヒントは ${state.remainingHints}/${state.hintCount} です。</p>
+  `;
+  let dialog = null;
+  const close = () => dialog && dialog.remove();
+  dialog = createModal("ヒント確認", [content], [
+    button("キャンセル", close, "ghost"),
+    button("OK", () => {
+      close();
+      requestHintUse(getCurrentPlayerName());
+    }, "primary")
+  ]);
+  dialog.classList.add("hint-confirm-overlay");
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  document.body.append(dialog);
+}
+
+function showPendingHintNotice() {
+  const notice = normalizeHintNotice(state.hintNotice, state.round);
+  if (!notice || !notice.id || notice.id === lastShownHintNoticeId) return;
+  lastShownHintNoticeId = notice.id;
+  document.querySelectorAll(".hint-notice-overlay").forEach((node) => node.remove());
+  let dialog = null;
+  const close = () => dialog && dialog.remove();
+  dialog = createModal("ヒント発動", [hintNoticePanel(notice)], [
+    button("OK", close, "primary")
+  ]);
+  dialog.classList.add("hint-notice-overlay");
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  document.body.append(dialog);
+}
+
+function hintNoticePanel(notice) {
+  const box = document.createElement("div");
+  box.className = "hint-dialog";
+  const ranks = notice.ranks.map((rank) => `<span class="hint-rank-badge rank-${rank}">${escapeHtml(rank)}</span>`).join("");
+  box.innerHTML = `
+    <p><strong>${escapeHtml(notice.playerName || "誰か")}</strong> がヒントを使いました。</p>
+    <p>このラウンドでは、次のランクは正解候補から外れます。</p>
+    <div class="hint-rank-list">${ranks}</div>
+  `;
+  return box;
+}
+
+function normalizeHintNotice(notice, round = state.round) {
+  if (!notice || typeof notice !== "object") return null;
+  const ranks = Array.isArray(notice.ranks)
+    ? notice.ranks.map(String).filter((rank) => ALL_RANKS.includes(rank))
+    : [];
+  if (!ranks.length) return null;
+  const noticeRound = Math.max(1, Number(notice.round) || round || 1);
+  if (Number(round) && noticeRound !== Number(round)) return null;
+  return {
+    id: String(notice.id || `${noticeRound}-${ranks.join("-")}`),
+    playerName: String(notice.playerName || "誰か").slice(0, 12),
+    ranks,
+    round: noticeRound
+  };
 }
 
 function answerBox() {
@@ -1257,7 +1349,7 @@ function applyRemoteAction(action) {
       beginRankAnswer(payload.playerName);
       break;
     case "useHint":
-      useHint();
+      useHint(payload.playerName);
       break;
     case "judge":
       if (payload.rank) judge(payload.rank, payload.playerName);
