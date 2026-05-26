@@ -5,10 +5,10 @@ const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
 const AUTO_SETUPS = [
   { topic: "強そうな動物", startWord: "オオカミ", initialRank: "B" },
-  { topic: "好きな食べ物", startWord: "カレー", initialRank: "A" },
+  { topic: "給食のうれしいメニュー", startWord: "カレー", initialRank: "A" },
   { topic: "モテそうな職業", startWord: "美容師", initialRank: "B" },
-  { topic: "学校にありそうなもの", startWord: "黒板", initialRank: "B" },
-  { topic: "旅行先として行きたい場所", startWord: "京都", initialRank: "A" }
+  { topic: "贅沢なもの", startWord: "ハーゲンダッツ", initialRank: "B" },
+  { topic: "強そうな犬の名前", startWord: "タロウ", initialRank: "C" }
 ];
 const PHASE_LABELS = {
   setup: "ルール設定",
