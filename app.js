@@ -1,5 +1,6 @@
 const STORAGE_KEY = "tier-sense-state-v1";
 const CHAT_HEIGHT_KEY = "tier-sense-chat-height";
+const CHAT_COLLAPSED_KEY = "tier-sense-chat-collapsed";
 const GAME_TITLE = "みんなでティア表ゲーム";
 const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
@@ -49,7 +50,8 @@ const els = {
   chatLog: document.querySelector("#chatLog"),
   chatForm: document.querySelector("#chatForm"),
   chatInput: document.querySelector("#chatInput"),
-  chatResizeHandle: document.querySelector("#chatResizeHandle")
+  chatResizeHandle: document.querySelector("#chatResizeHandle"),
+  chatToggleButton: document.querySelector("#chatToggleButton")
 };
 
 els.help.addEventListener("click", showHowToPlay);
@@ -235,6 +237,9 @@ function renderPanel() {
     return;
   }
 
+  const operationStatus = createOperationStatus();
+  if (operationStatus) els.panelBody.append(operationStatus);
+
   if (state.phase === "gameStart") {
     els.panelBody.append(createIntroScreen("ゲーム開始"));
     return;
@@ -336,7 +341,7 @@ function renderPanel() {
       )
     ];
     if (canCurrentPlayerJudge()) {
-      children.push(createModal("ランク決定", [answersBox(), createRankPicker()], [
+      children.push(createModal("ランク決定", [createOperationStatus(), answersBox(), createSelectedRankFocus(), createRankPicker()].filter(Boolean), [
         button("キャンセル", () => {
           const playerName = getCurrentPlayerName();
           if (sendRemoteAction("cancelRankAnswer", { playerName })) return;
@@ -792,8 +797,62 @@ function createSetterPromptCard(compact = false) {
 function createWaitingPanel(text) {
   const panel = document.createElement("div");
   panel.className = "waiting-panel";
-  panel.textContent = text;
+  panel.innerHTML = `
+    <span class="waiting-eyebrow">待機中</span>
+    <strong>${escapeHtml(text)}</strong>
+    <p>出題が終わると単語が発表されます。</p>
+  `;
   return panel;
+}
+
+function createOperationStatus() {
+  const info = getOperationStatus();
+  if (!info) return null;
+  const box = document.createElement("div");
+  box.className = `operation-status ${info.tone || ""}`;
+  box.innerHTML = `
+    <span>${escapeHtml(info.label)}</span>
+    <strong>${escapeHtml(info.title)}</strong>
+    <p>${escapeHtml(info.detail)}</p>
+  `;
+  return box;
+}
+
+function getOperationStatus() {
+  const setter = getRoundTopicSetterName() || "出題者";
+  const activeAnswerer = getActiveAnswererName();
+  const playerName = getCurrentPlayerName();
+  const isSetter = canCurrentPlayerViewSecret();
+  const isJudge = canCurrentPlayerJudge();
+
+  if (state.phase === "secret") {
+    return isSetter
+      ? { label: "あなたの番", title: "秘密ランクを見て単語を考える", detail: "入力するを押すと単語入力に進みます。", tone: "active" }
+      : { label: "待ち", title: `${setter}が出題を考えています`, detail: "単語が発表されるまで少し待ちます。" };
+  }
+  if (state.phase === "answer") {
+    return isSetter
+      ? { label: "あなたの番", title: "単語を入力してください", detail: "秘密ランクにちょうど合いそうな単語を入れます。", tone: "active" }
+      : { label: "待ち", title: `${setter}が出題を考えています`, detail: "入力が終わると全員に単語が発表されます。" };
+  }
+  if (state.phase === "discussion") {
+    if (activeAnswerer) {
+      return { label: "判定中", title: `${activeAnswerer}がランクを選んでいます`, detail: "選択が終わるまで相談を見守ります。" };
+    }
+    const canAnswer = isRoundAnswererName(playerName);
+    return canAnswer
+      ? { label: "相談中", title: "ランクを相談して、回答する人を決める", detail: "回答するを押した人がランクを選びます。", tone: "active" }
+      : { label: "相談中", title: "回答者がランクを相談中", detail: "出題者は推理を見守ります。" };
+  }
+  if (state.phase === "judgement") {
+    return isJudge
+      ? { label: "あなたの番", title: state.selectedRank ? `${state.selectedRank}を選択中` : "ランクを選択してください", detail: "選んだランクが秘密ランクと一致すると成功です。", tone: "active" }
+      : { label: "待ち", title: `${activeAnswerer || "回答者"}がランクを選んでいます`, detail: "決定すると結果発表に進みます。" };
+  }
+  if (state.phase === "result") {
+    return { label: "結果", title: "結果を確認中", detail: "単語、秘密ランク、選ばれたランクを見比べます。" };
+  }
+  return null;
 }
 
 function goAnswerPhase(playerName) {
@@ -1111,22 +1170,56 @@ function createRankPicker() {
   return picker;
 }
 
+function createSelectedRankFocus() {
+  const box = document.createElement("div");
+  box.className = `selected-rank-focus${state.selectedRank ? " has-selection" : ""}`;
+  if (state.selectedRank) {
+    box.innerHTML = `
+      <span>選択中のランク</span>
+      <strong class="rank-${state.selectedRank}">${escapeHtml(state.selectedRank)}</strong>
+      <p>このランクで決定できます。</p>
+    `;
+  } else {
+    box.innerHTML = `
+      <span>選択中のランク</span>
+      <strong>未選択</strong>
+      <p>表かボタンからランクを選んでください。</p>
+    `;
+  }
+  return box;
+}
+
 function resultPanel(result) {
   const box = document.createElement("div");
-  box.className = "result-panel";
+  box.className = `result-panel ${result.success ? "success" : "failure"}`;
   const remaining = Math.max(0, state.goalStreak - state.streak);
-  const answerHtml = Array.isArray(result.answers) && result.answers.length
-    ? result.answers.map((answer) => `<span class="answer-word small-answer">${escapeHtml(answer.word)}</span>`).join("")
-    : `<span class="answer-word">${escapeHtml(result.answer)}</span>`;
+  const words = Array.isArray(result.answers) && result.answers.length
+    ? result.answers.map((answer) => answer.word).filter(Boolean)
+    : String(result.answer || "").split(" / ").filter(Boolean);
+  const answerHtml = words.length
+    ? words.map((word) => `<span class="answer-word small-answer">${escapeHtml(word)}</span>`).join("")
+    : `<span class="answer-word">未入力</span>`;
   const unlocked = result.unlockedRanks && result.unlockedRanks.length
     ? `<p class="unlock-note">新ランク ${result.unlockedRanks.join(" / ")} が解放されました。</p>`
     : "";
   box.innerHTML = `
     <div class="result-stamp ${result.success ? "success" : "failure"}">${result.success ? "正解" : "不正解"}</div>
-    <div>${answerHtml}</div>
-    <p>正解ランク <strong>${result.secretRank}</strong></p>
-    <p>判定ランク <strong>${result.judgedRank}</strong></p>
-    <p>連続正解目標まであと <strong>${remaining}</strong></p>
+    <div class="result-compare-grid">
+      <div class="result-compare-card word-card">
+        <span>単語</span>
+        <div class="result-word-list">${answerHtml}</div>
+      </div>
+      <div class="result-compare-card secret-card">
+        <span>秘密ランク</span>
+        <strong class="rank-${result.secretRank}">${escapeHtml(result.secretRank)}</strong>
+      </div>
+      <div class="result-compare-card judged-card ${result.success ? "matched" : "missed"}">
+        <span>選ばれたランク</span>
+        <strong class="rank-${result.judgedRank}">${escapeHtml(result.judgedRank)}</strong>
+      </div>
+    </div>
+    <p class="result-message">${result.success ? "ランク一致。連続正解が伸びました。" : "ランク不一致。連続正解は0に戻ります。"}</p>
+    <p class="result-remaining">連続正解目標まであと <strong>${remaining}</strong></p>
     ${unlocked}
   `;
   return box;
@@ -1297,6 +1390,17 @@ function initChatResize() {
   if (!panel || !handle) return;
 
   setChatHeight(Number(localStorage.getItem(CHAT_HEIGHT_KEY)) || 154);
+  setChatCollapsed(localStorage.getItem(CHAT_COLLAPSED_KEY) === "1");
+
+  if (els.chatToggleButton) {
+    els.chatToggleButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const collapsed = !panel.classList.contains("collapsed");
+      setChatCollapsed(collapsed);
+      localStorage.setItem(CHAT_COLLAPSED_KEY, collapsed ? "1" : "0");
+    });
+  }
 
   let startY = 0;
   let startHeight = 0;
@@ -1309,6 +1413,7 @@ function initChatResize() {
   };
 
   handle.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("#chatToggleButton") || panel.classList.contains("collapsed")) return;
     event.preventDefault();
     startY = event.clientY;
     startHeight = panel.getBoundingClientRect().height;
@@ -1334,6 +1439,16 @@ function initChatResize() {
 function setChatHeight(height) {
   const nextHeight = clamp(Number(height) || 154, 110, Math.max(110, window.innerHeight - 92));
   document.documentElement.style.setProperty("--chat-height", `${Math.round(nextHeight)}px`);
+}
+
+function setChatCollapsed(collapsed) {
+  const panel = els.chatPanel;
+  if (!panel) return;
+  panel.classList.toggle("collapsed", collapsed);
+  if (els.chatToggleButton) {
+    els.chatToggleButton.textContent = collapsed ? "＋" : "−";
+    els.chatToggleButton.setAttribute("aria-label", collapsed ? "チャットを開く" : "チャットを最小化");
+  }
 }
 
 function renderChat() {
