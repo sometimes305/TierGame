@@ -1707,7 +1707,7 @@ function bindSetupFormBehavior(root) {
       control.classList.toggle("readonly-preview", auto);
     });
     if (initialRankInput) {
-      initialRankInput.disabled = !roleAllowsEdit || auto;
+      initialRankInput.disabled = !roleAllowsEdit;
       initialRankInput.readOnly = false;
       initialRankInput.removeAttribute("readonly");
       initialRankInput.setAttribute("aria-readonly", auto ? "true" : "false");
@@ -1789,7 +1789,7 @@ function bindSetupFormBehavior(root) {
       unlockManualFields();
     }, { passive: true });
   }
-  [topicInput, startWordInput].filter(Boolean).forEach((control) => {
+  [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
     const prepareInput = () => unlockManualFields();
     control.addEventListener("pointerdown", prepareInput);
     control.addEventListener("touchstart", prepareInput, { passive: true });
