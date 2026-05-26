@@ -88,6 +88,15 @@ function setTopExclusionHeight() {
   document.documentElement.style.setProperty("--top-exclusion-height", `${topExclusionHeight}px`);
 }
 
+function isRoomConnected() {
+  return Boolean(window.TierOnline && window.TierOnline.online);
+}
+
+function getDisplayPhaseLabel() {
+  if (state.phase === "setup" && !isRoomConnected()) return "ロビー";
+  return PHASE_LABELS[state.phase] || "ロビー";
+}
+
 function render() {
   document.body.dataset.phase = state.phase;
   document.body.dataset.role = window.TierOnline && window.TierOnline.online ? (window.TierOnline.host ? "host" : "guest") : "none";
@@ -95,9 +104,9 @@ function render() {
   els.goal.textContent = state.goalStreak;
   els.round.textContent = state.round;
   els.topic.textContent = state.topic || "未設定";
-  els.headerPhase.textContent = PHASE_LABELS[state.phase];
-  els.phase.textContent = PHASE_LABELS[state.phase];
-  els.panelTitle.textContent = PHASE_LABELS[state.phase];
+  els.headerPhase.textContent = getDisplayPhaseLabel();
+  els.phase.textContent = getDisplayPhaseLabel();
+  els.panelTitle.textContent = getDisplayPhaseLabel();
 
   renderBoard();
   renderPanel();
@@ -180,7 +189,7 @@ function renderPanel() {
     const canView = canCurrentPlayerViewSecret();
     const children = [
       playBar(
-        canView ? "あなたは回答者です。秘密ランクを確認してください。" : `${state.topicSetterName || state.answererName || "お題担当"}さん以外が秘密ランクを確認しています...`,
+        canView ? "あなたは回答者です。秘密ランクを確認してください。" : `${getRoundTopicSetterName() || "出題者"}さん以外が秘密ランクを確認しています...`,
         [
           button(state.secretVisible ? "隠す" : "秘密を見る", () => {
             state.secretVisible = !state.secretVisible;
@@ -212,7 +221,7 @@ function renderPanel() {
     const canAnswer = canCurrentPlayerViewSecret();
     const children = [
       playBar(
-        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${state.topicSetterName || state.answererName || "お題担当"}さん以外が回答を考えています...`,
+        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${getRoundTopicSetterName() || "出題者"}さん以外が回答を考えています...`,
         []
       )
     ];
@@ -341,7 +350,7 @@ function startGame(settings) {
   state.hintCount = resolved.hintCount;
   state.remainingHints = resolved.hintCount;
   state.topicSetterName = pickInitialTopicSetter();
-  state.answererName = state.topicSetterName;
+  state.answererName = "";
   state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
   addWord(state.initialRank, state.startWord, 0);
   prepareRound();
@@ -353,7 +362,7 @@ function prepareRound() {
   state.currentSecretRank = pick(state.unlockedRanks);
   state.currentAnswer = "";
   state.currentAnswers = [];
-  state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName || state.answererName);
+  state.answererNames = getAnswererNamesForTopicSetter(getRoundTopicSetterName());
   state.judgedRank = "";
   state.selectedRank = "";
   state.eliminatedRanks = [];
@@ -491,17 +500,21 @@ function getTopicSetterCandidateNames() {
   return names;
 }
 
+function getRoundTopicSetterName() {
+  return String(state.topicSetterName || "").trim();
+}
+
 function getAnswererNamesForTopicSetter(topicSetterName) {
   const names = getParticipantNames();
-  if (names.length <= 1) return names;
-  const answers = names.filter((name) => normalizeName(name) !== normalizeName(topicSetterName));
-  return answers.length ? answers : names;
+  const setter = normalizeName(topicSetterName);
+  return uniqueNames(names).filter((name) => normalizeName(name) && normalizeName(name) !== setter);
 }
 
 function getActiveAnswererNames() {
-  return Array.isArray(state.answererNames) && state.answererNames.length
-    ? state.answererNames
-    : getAnswererNamesForTopicSetter(state.topicSetterName || state.answererName);
+  const setter = getRoundTopicSetterName();
+  const stored = Array.isArray(state.answererNames) ? state.answererNames : [];
+  const answerers = uniqueNames(stored).filter((name) => normalizeName(name) !== normalizeName(setter));
+  return answerers.length ? answerers : getAnswererNamesForTopicSetter(setter);
 }
 
 function pickInitialTopicSetter() {
@@ -513,12 +526,6 @@ function pickInitialTopicSetter() {
   const matched = names.find((name) => normalizeName(name) === normalizeName(hostName));
   state.answererIndex = Math.max(0, names.indexOf(matched || names[0]));
   return matched || names[0];
-}
-
-function pickInitialAnswerer(settings) {
-  const names = getTopicSetterCandidateNames();
-  state.answererIndex = Math.floor(Math.random() * names.length);
-  return names[state.answererIndex];
 }
 
 function canStartGame() {
@@ -539,12 +546,12 @@ function startBlockedReason() {
 function rotateTopicSetter() {
   const names = getTopicSetterCandidateNames();
   if (!names.length) return;
-  const currentName = state.topicSetterName || state.answererName;
+  const currentName = getRoundTopicSetterName();
   const current = names.findIndex((name) => normalizeName(name) === normalizeName(currentName));
   state.answererIndex = current >= 0 ? current + 1 : state.answererIndex + 1;
   state.answererIndex %= names.length;
   state.topicSetterName = names[state.answererIndex];
-  state.answererName = state.topicSetterName;
+  state.answererName = "";
   state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
 }
 
@@ -594,8 +601,9 @@ function normalizeLoadedState(loaded) {
   next.initialRank = ["A", "B", "C"].includes(next.initialRank) ? next.initialRank : "B";
   next.topicMode = next.topicMode === "manual" ? "manual" : "auto";
   next.topicSetterName = String(next.topicSetterName || next.answererName || "");
-  next.answererName = String(next.answererName || "");
+  next.answererName = "";
   next.answererNames = Array.isArray(next.answererNames) ? next.answererNames.map(String).filter(Boolean) : [];
+  next.answererNames = uniqueNames(next.answererNames).filter((name) => normalizeName(name) !== normalizeName(next.topicSetterName));
   next.currentAnswers = Array.isArray(next.currentAnswers) ? next.currentAnswers
     .filter(Boolean)
     .map((answer) => ({
@@ -604,7 +612,7 @@ function normalizeLoadedState(loaded) {
     }))
     .filter((answer) => answer.word) : [];
   if (!next.currentAnswers.length && next.currentAnswer) {
-    next.currentAnswers = [{ playerName: next.answererName || "Player", word: String(next.currentAnswer).slice(0, 20) }];
+    next.currentAnswers = [{ playerName: "Player", word: String(next.currentAnswer).slice(0, 20) }];
   }
   next.chatMessages = Array.isArray(next.chatMessages) ? next.chatMessages.slice(-80).map((message, index) => ({
     id: String(message.id || `${Date.now()}-${index}`),
@@ -639,7 +647,7 @@ function getCurrentAnswers() {
       }));
   }
   if (state.currentAnswer) {
-    return [{ playerName: state.answererName || "Player", word: state.currentAnswer }];
+    return [{ playerName: getActiveAnswererNames()[0] || "Player", word: state.currentAnswer }];
   }
   return [];
 }
@@ -648,6 +656,7 @@ function submitAnswer(answer, playerName) {
   const safeWord = String(answer || "").trim().slice(0, 20);
   if (!safeWord) return;
   const safeName = String(playerName || getCurrentPlayerName() || "Player").trim();
+  if (!isRoundAnswererName(safeName)) return;
   const answers = getCurrentAnswers();
   const existing = answers.findIndex((item) => normalizeName(item.playerName) === normalizeName(safeName));
   const nextAnswer = { playerName: safeName, word: safeWord };
@@ -661,6 +670,10 @@ function submitAnswer(answer, playerName) {
 function hasCurrentPlayerAnswered() {
   const playerName = getCurrentPlayerName();
   return getCurrentAnswers().some((answer) => normalizeName(answer.playerName) === normalizeName(playerName));
+}
+
+function isRoundAnswererName(playerName) {
+  return getActiveAnswererNames().some((name) => normalizeName(name) === normalizeName(playerName));
 }
 
 function allAnswerersSubmitted() {
@@ -831,6 +844,19 @@ function normalizeName(name) {
 
 function getCurrentPlayerName() {
   return window.TierGame ? window.TierGame.getPlayerName() : "Player";
+}
+
+function uniqueNames(names) {
+  const seen = new Set();
+  const result = [];
+  for (const name of names || []) {
+    const safeName = String(name || "").trim();
+    const key = normalizeName(safeName);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(safeName);
+  }
+  return result;
 }
 
 function resultMessage(type, text) {
