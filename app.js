@@ -9,7 +9,7 @@ const AUTO_SETUPS = [
   { topic: "旅行先として行きたい場所", startWord: "京都", initialRank: "A" }
 ];
 const PHASE_LABELS = {
-  setup: "セットアップ",
+  setup: "ルール設定",
   secret: "秘密ランク",
   answer: "回答",
   discussion: "相談",

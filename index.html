@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Tier Sense</title>
-    <link rel="stylesheet" href="style.css?v=20260526-chat" />
+    <link rel="stylesheet" href="style.css?v=20260526-roomchat" />
     <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
@@ -14,7 +14,7 @@
         <span class="topbar-spacer" aria-hidden="true"></span>
         <div class="title-block">
           <p class="eyebrow">Tier Sense</p>
-          <h1 id="headerPhaseDisplay">セットアップ</h1>
+          <h1 id="headerPhaseDisplay">ルール設定</h1>
           <div id="onlineBadge" class="online-badge">オフライン</div>
         </div>
         <button type="button" class="topbar-button" id="helpButton">遊び方</button>
@@ -51,8 +51,8 @@
         <aside class="control-panel" aria-labelledby="panelTitle">
           <div class="panel-head">
             <p class="label">操作</p>
-            <h2 id="panelTitle">セットアップ</h2>
-            <div class="phase-pill" id="phaseDisplay">セットアップ</div>
+            <h2 id="panelTitle">ルール設定</h2>
+            <div class="phase-pill" id="phaseDisplay">ルール設定</div>
           </div>
           <div id="panelBody"></div>
         </aside>
@@ -212,7 +212,7 @@
       </form>
     </template>
 
-    <script src="app.js?v=20260526-chat"></script>
-    <script src="online.js?v=20260526-chat"></script>
+    <script src="app.js?v=20260526-roomchat"></script>
+    <script src="online.js?v=20260526-roomchat"></script>
   </body>
 </html>
