@@ -951,10 +951,14 @@ button:focus-visible {
 .setter-prompt {
   display: grid;
   gap: 14px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(14, 14, 14, 0.94);
-  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(23, 107, 100, 0.08), rgba(250, 248, 241, 0.94)),
+    var(--panel);
+  color: var(--ink);
   padding: 18px;
+  box-shadow: var(--shadow);
 }
 
 .setter-prompt.compact {
@@ -966,9 +970,11 @@ button:focus-visible {
   grid-template-columns: 48px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  border: 3px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(23, 107, 100, 0.28);
   border-radius: var(--radius);
+  background: #fff;
   padding: 10px 12px;
+  color: var(--accent-strong);
   font-size: 18px;
   font-weight: 950;
   line-height: 1.35;
@@ -993,14 +999,15 @@ button:focus-visible {
 
 .setter-input-button {
   min-height: 64px;
-  border-color: #4d12d8;
-  background: #4d12d8;
+  border-color: var(--accent);
+  background: var(--accent);
   font-size: 24px;
   font-weight: 950;
+  box-shadow: 0 12px 24px rgba(23, 107, 100, 0.18);
 }
 
 .setter-word-count {
-  color: #fff;
+  color: var(--muted);
   font-size: 14px;
   font-weight: 950;
   white-space: nowrap;
@@ -1264,13 +1271,15 @@ button:focus-visible {
 }
 
 .word-input-overlay .game-modal {
-  border: 4px solid rgba(140, 140, 140, 0.95);
+  border: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .word-input-overlay .game-modal h3 {
-  background: #4d12d8;
-  padding: 16px;
-  font-size: 28px;
+  background:
+    linear-gradient(180deg, rgba(23, 107, 100, 0.95), var(--accent-strong));
+  padding: 14px 16px;
+  font-size: 24px;
 }
 
 .word-input-form {
@@ -1283,8 +1292,12 @@ button:focus-visible {
   grid-template-columns: minmax(0, 1fr) 80px;
   align-items: center;
   gap: 12px;
-  color: #5a5a5a;
-  font-size: 24px;
+  border: 1px solid rgba(23, 107, 100, 0.18);
+  border-radius: var(--radius);
+  background: rgba(250, 248, 241, 0.92);
+  padding: 12px;
+  color: var(--muted);
+  font-size: 22px;
   font-weight: 950;
   text-align: right;
 }
@@ -1296,16 +1309,23 @@ button:focus-visible {
 
 .word-input-form input {
   min-height: 92px;
-  border: 4px solid #8c8c8c;
+  border: 2px solid var(--line);
   border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
   text-align: center;
   font-size: 24px;
   font-weight: 950;
 }
 
+.word-input-form input:focus {
+  outline: 3px solid rgba(23, 107, 100, 0.18);
+  border-color: var(--accent);
+}
+
 .word-input-form p {
   margin: 0;
-  color: #c45f84;
+  color: var(--warn);
   font-size: 15px;
   font-weight: 950;
 }
