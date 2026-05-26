@@ -551,6 +551,15 @@ function resolveSetup(settings = {}) {
   };
 }
 
+function pickAutoSetup(exclude = {}) {
+  const candidates = AUTO_SETUPS.filter((setup) =>
+    setup.topic !== exclude.topic ||
+    setup.startWord !== exclude.startWord ||
+    setup.initialRank !== exclude.initialRank
+  );
+  return pick(candidates.length ? candidates : AUTO_SETUPS);
+}
+
 function getParticipantNames() {
   const online = window.TierOnline;
   const names = online && Array.isArray(online.participants)
@@ -1522,6 +1531,10 @@ function applySetupRoleUi(root) {
   controls.forEach((control) => (control.disabled = true));
 }
 
+function canEditSetupControls() {
+  return Boolean(window.TierOnline && window.TierOnline.online && window.TierOnline.isHost());
+}
+
 function bindSetupFormBehavior(root) {
   const topicInput = root.querySelector("#topicInput");
   const startWordInput = root.querySelector("#startWordInput");
@@ -1529,6 +1542,7 @@ function bindSetupFormBehavior(root) {
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
   const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
+  let lastAutoRerollAt = 0;
   const syncLocalSetupState = () => {
     state.topicMode = root.querySelector('[name="topicMode"]:checked')?.value || state.topicMode || "auto";
     state.topic = topicInput ? topicInput.value.trim() : state.topic;
@@ -1538,16 +1552,31 @@ function bindSetupFormBehavior(root) {
     state.hintCount = hintInput ? clamp(Number(hintInput.value) || 0, 0, 20) : state.hintCount;
     state.remainingHints = state.hintCount;
   };
+  const applyRandomAutoSetup = () => {
+    const auto = pickAutoSetup({
+      topic: topicInput ? topicInput.value.trim() : "",
+      startWord: startWordInput ? startWordInput.value.trim() : "",
+      initialRank: initialRankInput ? initialRankInput.value : ""
+    });
+    if (topicInput) topicInput.value = auto.topic;
+    if (startWordInput) startWordInput.value = auto.startWord;
+    if (initialRankInput) initialRankInput.value = auto.initialRank;
+    lastAutoRerollAt = Date.now();
+  };
   const applyMode = () => {
     const mode = root.querySelector('[name="topicMode"]:checked')?.value || "auto";
     const auto = mode === "auto";
-    const hostCanEdit = Boolean(window.TierOnline && window.TierOnline.isHost());
+    const hostCanEdit = canEditSetupControls();
     [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
       const shouldLockPreview = auto && control.tagName !== "SELECT";
       control.readOnly = shouldLockPreview;
       control.toggleAttribute("readonly", shouldLockPreview);
       control.classList.toggle("readonly-preview", auto);
-      if (hostCanEdit) control.disabled = control === initialRankInput && auto;
+      if (hostCanEdit) {
+        control.disabled = control === initialRankInput && auto;
+      } else {
+        control.disabled = true;
+      }
     });
   };
   [topicInput, startWordInput, initialRankInput, goalInput, hintInput].filter(Boolean).forEach((control) => {
@@ -1559,13 +1588,22 @@ function bindSetupFormBehavior(root) {
   topicModeInputs.forEach((input) => {
     if (input.dataset.boundSetupMode) return;
     input.dataset.boundSetupMode = "1";
+    input.addEventListener("click", () => {
+      if (input.value !== "auto" || !input.checked || !canEditSetupControls()) return;
+      applyRandomAutoSetup();
+      applyMode();
+      syncLocalSetupState();
+      syncSetupConfig();
+    });
     input.addEventListener("change", () => {
       state.topicMode = input.value;
-      if (input.value === "auto" && input.checked) {
-        const auto = pick(AUTO_SETUPS);
-        if (topicInput) topicInput.value = auto.topic;
-        if (startWordInput) startWordInput.value = auto.startWord;
-        if (initialRankInput) initialRankInput.value = auto.initialRank;
+      if (
+        input.value === "auto" &&
+        input.checked &&
+        canEditSetupControls() &&
+        Date.now() - lastAutoRerollAt > 100
+      ) {
+        applyRandomAutoSetup();
       }
       applyMode();
       syncLocalSetupState();
