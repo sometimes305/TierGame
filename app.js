@@ -1650,8 +1650,8 @@ function canEditSetupControls() {
   const online = window.TierOnline;
   return Boolean(
     online &&
-    online.online &&
-    (online.host || (typeof online.isHost === "function" && online.isHost()))
+    (online.host || (typeof online.isHost === "function" && online.isHost())) &&
+    (online.online || document.body.dataset.role === "host")
   );
 }
 
@@ -1662,6 +1662,7 @@ function bindSetupFormBehavior(root) {
   const goalInput = root.querySelector("#goalInput");
   const hintInput = root.querySelector("#hintCountInput");
   const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
+  const topicModeFieldset = topicModeInputs[0] ? topicModeInputs[0].closest("fieldset") : null;
   let lastAutoRerollAt = 0;
   const modeValue = () => root.querySelector('[name="topicMode"]:checked')?.value || "auto";
   const formAllowsEdit = () => canEditSetupControls() || topicModeInputs.some((input) => !input.disabled);
@@ -1698,23 +1699,20 @@ function bindSetupFormBehavior(root) {
     const mode = modeValue();
     const auto = mode === "auto";
     const roleAllowsEdit = formAllowsEdit();
-    [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
-      const isInitialRank = control === initialRankInput;
-      const shouldLockPreview = auto && !isInitialRank;
-      control.readOnly = shouldLockPreview;
+    [topicInput, startWordInput].filter(Boolean).forEach((control) => {
+      control.disabled = !roleAllowsEdit;
+      control.readOnly = false;
+      control.removeAttribute("readonly");
+      control.setAttribute("aria-readonly", auto ? "true" : "false");
       control.classList.toggle("readonly-preview", auto);
-      if (roleAllowsEdit) {
-        control.disabled = isInitialRank && auto;
-        if (shouldLockPreview) {
-          control.setAttribute("readonly", "readonly");
-        } else {
-          control.removeAttribute("readonly");
-          control.readOnly = false;
-        }
-      } else {
-        control.disabled = true;
-      }
     });
+    if (initialRankInput) {
+      initialRankInput.disabled = !roleAllowsEdit || auto;
+      initialRankInput.readOnly = false;
+      initialRankInput.removeAttribute("readonly");
+      initialRankInput.setAttribute("aria-readonly", auto ? "true" : "false");
+      initialRankInput.classList.toggle("readonly-preview", auto);
+    }
   };
   [topicInput, startWordInput, initialRankInput, goalInput, hintInput].filter(Boolean).forEach((control) => {
     if (control.dataset.boundSetupCache) return;
@@ -1763,6 +1761,34 @@ function bindSetupFormBehavior(root) {
       syncSetupConfig();
     });
   });
+  if (topicModeFieldset && !topicModeFieldset.dataset.boundSetupModeDelegate) {
+    topicModeFieldset.dataset.boundSetupModeDelegate = "1";
+    topicModeFieldset.addEventListener("click", (event) => {
+      const label = event.target.closest("label");
+      if (!label || !topicModeFieldset.contains(label)) return;
+      const input = label.querySelector('[name="topicMode"]');
+      if (!input || input.disabled) return;
+      input.checked = true;
+      state.topicMode = input.value;
+      if (input.value === "auto" && canEditSetupControls() && Date.now() - lastAutoRerollAt > 100) {
+        applyRandomAutoSetup();
+      }
+      applyMode();
+      if (input.value === "manual") unlockManualFields();
+      syncLocalSetupState();
+      syncSetupConfig();
+    });
+    topicModeFieldset.addEventListener("touchend", (event) => {
+      const label = event.target.closest("label");
+      if (!label || !topicModeFieldset.contains(label)) return;
+      const input = label.querySelector('[name="topicMode"]');
+      if (!input || input.disabled || input.value !== "manual") return;
+      input.checked = true;
+      state.topicMode = "manual";
+      applyMode();
+      unlockManualFields();
+    }, { passive: true });
+  }
   [topicInput, startWordInput].filter(Boolean).forEach((control) => {
     const prepareInput = () => unlockManualFields();
     control.addEventListener("pointerdown", prepareInput);
