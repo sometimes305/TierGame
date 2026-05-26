@@ -10,8 +10,10 @@ const AUTO_SETUPS = [
 ];
 const PHASE_LABELS = {
   setup: "ルール設定",
-  secret: "秘密ランク",
-  answer: "回答",
+  gameStart: "ゲーム開始",
+  roundIntro: "出題者発表",
+  secret: "出題準備",
+  answer: "単語入力",
   discussion: "相談",
   judgement: "判定",
   result: "結果",
@@ -24,6 +26,8 @@ window.addEventListener("orientationchange", setTopExclusionHeight);
 
 let state = createInitialState();
 let applyingRemoteState = false;
+let phaseTimer = null;
+let scheduledPhaseKey = "";
 
 const els = {
   help: document.querySelector("#helpButton"),
@@ -97,6 +101,35 @@ function getDisplayPhaseLabel() {
   return PHASE_LABELS[state.phase] || "ロビー";
 }
 
+function canDriveGameFlow() {
+  return !window.TierOnline || !window.TierOnline.online || window.TierOnline.isHost();
+}
+
+function schedulePhaseAdvance() {
+  const autoPhases = ["gameStart", "roundIntro"];
+  const shouldSchedule = autoPhases.includes(state.phase) && canDriveGameFlow();
+  const key = `${state.phase}:${state.round}:${state.topicSetterName}`;
+  if (!shouldSchedule) {
+    if (phaseTimer) window.clearTimeout(phaseTimer);
+    phaseTimer = null;
+    scheduledPhaseKey = "";
+    return;
+  }
+  if (phaseTimer && scheduledPhaseKey === key) return;
+  if (phaseTimer) window.clearTimeout(phaseTimer);
+  scheduledPhaseKey = key;
+  const nextPhase = state.phase === "gameStart" ? "roundIntro" : "secret";
+  const delay = state.phase === "gameStart" ? 1100 : 1500;
+  phaseTimer = window.setTimeout(() => {
+    phaseTimer = null;
+    scheduledPhaseKey = "";
+    if (state.phase !== key.split(":")[0]) return;
+    state.phase = nextPhase;
+    saveGame();
+    render();
+  }, delay);
+}
+
 function render() {
   document.body.dataset.phase = state.phase;
   document.body.dataset.role = window.TierOnline && window.TierOnline.online ? (window.TierOnline.host ? "host" : "guest") : "none";
@@ -111,6 +144,7 @@ function render() {
   renderBoard();
   renderPanel();
   renderChat();
+  schedulePhaseAdvance();
   if (window.TierOnline && window.TierOnline.bindControls) {
     window.TierOnline.bindControls();
   }
@@ -185,55 +219,37 @@ function renderPanel() {
     return;
   }
 
+  if (state.phase === "gameStart") {
+    els.panelBody.append(createIntroScreen("ゲーム開始"));
+    return;
+  }
+
+  if (state.phase === "roundIntro") {
+    els.panelBody.append(createIntroScreen(`今回の出題者は ${getRoundTopicSetterName() || "未定"}`));
+    return;
+  }
+
   if (state.phase === "secret") {
-    const canView = canCurrentPlayerViewSecret();
-    const children = [
-      playBar(
-        canView ? "あなたは回答者です。秘密ランクを確認してください。" : `${getRoundTopicSetterName() || "出題者"}さん以外が秘密ランクを確認しています...`,
-        [
-          button(state.secretVisible ? "隠す" : "秘密を見る", () => {
-            state.secretVisible = !state.secretVisible;
-            render();
-          }, "primary", "button", !canView),
-          button("入力へ", () => {
-            if (sendRemoteAction("goAnswer")) return;
-            state.secretVisible = false;
-            state.phase = "answer";
-            saveGame();
-            render();
-          }, "", "button", !canView)
-        ]
-      )
-    ];
-    if (canView && state.secretVisible) {
-      children.push(createModal("秘密ランク", [createSecretBox(true)], [
-        button("隠す", () => {
-          state.secretVisible = false;
-          render();
-        }, "primary")
-      ]));
+    if (canCurrentPlayerViewSecret()) {
+      els.panelBody.append(createSetterPromptCard());
+    } else {
+      els.panelBody.append(createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`));
     }
-    els.panelBody.append(createStack(children));
     return;
   }
 
   if (state.phase === "answer") {
-    const canAnswer = canCurrentPlayerViewSecret();
-    const children = [
-      playBar(
-        canAnswer ? `${state.currentSecretRank}に合う単語を考えてください。` : `${getRoundTopicSetterName() || "出題者"}さん以外が回答を考えています...`,
-        []
-      )
-    ];
-    if (canAnswer) {
+    if (canCurrentPlayerViewSecret()) {
       const alreadyAnswered = hasCurrentPlayerAnswered();
       const form = document.createElement("form");
-      form.className = "stack";
+      form.className = "word-input-form";
       form.innerHTML = `
-        <label>
-          <span>回答単語</span>
-          <input id="answerInput" maxlength="20" placeholder="例: ワニ" required ${alreadyAnswered ? "disabled" : ""} />
-        </label>
+        <div class="target-rank-line">
+          <span>狙うランク</span>
+          <strong class="target-rank-badge rank-${state.currentSecretRank}">${state.currentSecretRank}</strong>
+        </div>
+        <input id="answerInput" maxlength="20" placeholder="単語を入力" required ${alreadyAnswered ? "disabled" : ""} />
+        <p>単語は20文字以内で入力してください。</p>
       `;
       form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -244,15 +260,21 @@ function renderPanel() {
         saveGame();
         render();
       });
-      children.push(createModal(alreadyAnswered ? "提出済み" : "単語入力", [metaBox("狙うランク", state.currentSecretRank), answersBox(), form], [
+      const modal = createModal(alreadyAnswered ? "提出済み" : "単語入力", [form], [
         button("戻る", () => {
           state.phase = "secret";
           render();
         }, "ghost", "button", alreadyAnswered),
         button(alreadyAnswered ? "待機" : "OK", () => form.requestSubmit(), "primary", "button", alreadyAnswered)
+      ]);
+      modal.classList.add("word-input-overlay");
+      els.panelBody.append(createStack([
+        createSetterPromptCard(true),
+        modal
       ]));
+    } else {
+      els.panelBody.append(createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`));
     }
-    els.panelBody.append(createStack(children));
     return;
   }
 
@@ -278,7 +300,7 @@ function renderPanel() {
   if (state.phase === "judgement") {
     const children = [
       playBar(
-        state.selectedRank ? `${state.selectedRank}に決定しますか？` : "回答者がランクを選択中...",
+        state.selectedRank ? `${state.selectedRank}に決定しますか？` : "ホストがランクを選択中...",
         [
           button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank || !canCurrentPlayerJudge()),
           button("戻る", () => {
@@ -290,7 +312,7 @@ function renderPanel() {
       )
     ];
     if (canCurrentPlayerJudge()) {
-      children.push(createModal("回答入力", [answersBox(), createRankPicker()], [
+      children.push(createModal("ランク決定", [answersBox(), createRankPicker()], [
         button("キャンセル", () => {
           state.phase = "discussion";
           render();
@@ -353,12 +375,12 @@ function startGame(settings) {
   state.answererName = "";
   state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
   addWord(state.initialRank, state.startWord, 0);
-  prepareRound();
+  prepareRound({ showGameStart: true });
   saveGame();
   render();
 }
 
-function prepareRound() {
+function prepareRound(options = {}) {
   state.currentSecretRank = pick(state.unlockedRanks);
   state.currentAnswer = "";
   state.currentAnswers = [];
@@ -368,7 +390,7 @@ function prepareRound() {
   state.eliminatedRanks = [];
   state.secretVisible = false;
   state.lastResult = null;
-  state.phase = "secret";
+  state.phase = options.showGameStart ? "gameStart" : "roundIntro";
 }
 
 function useHint() {
@@ -518,14 +540,9 @@ function getActiveAnswererNames() {
 }
 
 function pickInitialTopicSetter() {
-  const online = window.TierOnline;
-  const hostName = online && online.online
-    ? online.localPlayerName
-    : getCurrentPlayerName();
   const names = getTopicSetterCandidateNames();
-  const matched = names.find((name) => normalizeName(name) === normalizeName(hostName));
-  state.answererIndex = Math.max(0, names.indexOf(matched || names[0]));
-  return matched || names[0];
+  state.answererIndex = Math.floor(Math.random() * names.length);
+  return names[state.answererIndex] || getCurrentPlayerName();
 }
 
 function canStartGame() {
@@ -556,7 +573,7 @@ function rotateTopicSetter() {
 }
 
 function showHowToPlay() {
-  alert("回答者が秘密ランクに合う単語を入力し、全員で相談します。オーナーがランクを選び、秘密ランクと一致すれば連続正解。不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
+  alert("出題者だけが秘密ランクを見て、それに合う単語を入力します。回答者は秘密ランクを見ずに相談し、ホストがランクを選びます。秘密ランクと一致すれば連続正解、不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
 }
 
 function saveGame() {
@@ -632,9 +649,54 @@ function createSecretBox(canView) {
   box.className = "secret-box";
   const rank = document.createElement("div");
   rank.className = canView && state.secretVisible ? "secret-rank" : "secret-rank hidden-secret";
-  rank.textContent = canView && state.secretVisible ? state.currentSecretRank : "回答者だけ見られます";
+  rank.textContent = canView && state.secretVisible ? state.currentSecretRank : "出題者だけ見られます";
   box.append(rank);
   return box;
+}
+
+function createIntroScreen(text) {
+  const overlay = document.createElement("div");
+  overlay.className = "round-intro-overlay";
+  const card = document.createElement("div");
+  card.className = "round-intro-card";
+  card.textContent = text;
+  overlay.append(card);
+  return overlay;
+}
+
+function createSetterPromptCard(compact = false) {
+  const card = document.createElement("div");
+  card.className = compact ? "setter-prompt compact" : "setter-prompt";
+  const instruction = document.createElement("div");
+  instruction.className = "setter-instruction";
+  instruction.innerHTML = `<strong class="target-rank-badge rank-${state.currentSecretRank}">${escapeHtml(state.currentSecretRank)}</strong><span>に適した単語を考えて入力してください。</span>`;
+  const actionRow = document.createElement("div");
+  actionRow.className = "setter-action-row";
+  actionRow.append(button("入力する", () => {
+    if (sendRemoteAction("goAnswer", { playerName: getCurrentPlayerName() })) return;
+    goAnswerPhase(getCurrentPlayerName());
+  }, "primary setter-input-button"));
+  const wordCount = document.createElement("div");
+  wordCount.className = "setter-word-count";
+  wordCount.textContent = `ワード数 ${countWords()} / 50`;
+  actionRow.append(wordCount);
+  card.append(instruction, actionRow);
+  return card;
+}
+
+function createWaitingPanel(text) {
+  const panel = document.createElement("div");
+  panel.className = "waiting-panel";
+  panel.textContent = text;
+  return panel;
+}
+
+function goAnswerPhase(playerName) {
+  if (!isRoundTopicSetterName(playerName || getCurrentPlayerName())) return;
+  state.secretVisible = false;
+  state.phase = "answer";
+  saveGame();
+  render();
 }
 
 function getCurrentAnswers() {
@@ -656,15 +718,11 @@ function submitAnswer(answer, playerName) {
   const safeWord = String(answer || "").trim().slice(0, 20);
   if (!safeWord) return;
   const safeName = String(playerName || getCurrentPlayerName() || "Player").trim();
-  if (!isRoundAnswererName(safeName)) return;
-  const answers = getCurrentAnswers();
-  const existing = answers.findIndex((item) => normalizeName(item.playerName) === normalizeName(safeName));
+  if (!isRoundTopicSetterName(safeName)) return;
   const nextAnswer = { playerName: safeName, word: safeWord };
-  if (existing >= 0) answers[existing] = nextAnswer;
-  else answers.push(nextAnswer);
-  state.currentAnswers = answers;
-  state.currentAnswer = answers.map((item) => item.word).join(" / ");
-  if (allAnswerersSubmitted()) state.phase = "discussion";
+  state.currentAnswers = [nextAnswer];
+  state.currentAnswer = safeWord;
+  state.phase = "discussion";
 }
 
 function hasCurrentPlayerAnswered() {
@@ -672,8 +730,8 @@ function hasCurrentPlayerAnswered() {
   return getCurrentAnswers().some((answer) => normalizeName(answer.playerName) === normalizeName(playerName));
 }
 
-function isRoundAnswererName(playerName) {
-  return getActiveAnswererNames().some((name) => normalizeName(name) === normalizeName(playerName));
+function isRoundTopicSetterName(playerName) {
+  return normalizeName(playerName) === normalizeName(getRoundTopicSetterName());
 }
 
 function allAnswerersSubmitted() {
@@ -686,8 +744,8 @@ function allAnswerersSubmitted() {
 
 function answerSummary() {
   const answers = getCurrentAnswers();
-  if (!answers.length) return "回答";
-  return `回答 ${answers.map((answer) => `「${answer.word}」`).join(" / ")}`;
+  if (!answers.length) return "単語";
+  return `単語 ${answers.map((answer) => `「${answer.word}」`).join(" / ")}`;
 }
 
 function createHintBox() {
@@ -714,7 +772,7 @@ function createHintBox() {
 function answerBox() {
   const box = document.createElement("div");
   box.className = "result-box";
-  box.innerHTML = `回答<span class="answer-word">${escapeHtml(state.currentAnswer)}</span>`;
+  box.innerHTML = `出題単語<span class="answer-word">${escapeHtml(state.currentAnswer)}</span>`;
   return box;
 }
 
@@ -723,8 +781,7 @@ function answersBox() {
   box.className = "answers-box";
   const title = document.createElement("strong");
   const answers = getCurrentAnswers();
-  const answerers = getActiveAnswererNames();
-  title.textContent = `回答 ${answers.length}/${answerers.length}`;
+  title.textContent = answers.length ? "出題単語" : "出題単語 未入力";
   box.append(title);
   if (!answers.length) {
     box.append(note("まだ回答がありません。"));
@@ -803,7 +860,7 @@ function resultPanel(result) {
     <div class="result-stamp ${result.success ? "success" : "failure"}">${result.success ? "正解" : "不正解"}</div>
     <div>${answerHtml}</div>
     <p>正解ランク <strong>${result.secretRank}</strong></p>
-    <p>回答ランク <strong>${result.judgedRank}</strong></p>
+    <p>判定ランク <strong>${result.judgedRank}</strong></p>
     <p>クリアまであと <strong>${remaining}</strong> 連続正解</p>
     ${unlocked}
   `;
@@ -830,8 +887,7 @@ function countWords() {
 
 function canCurrentPlayerViewSecret() {
   const playerName = getCurrentPlayerName();
-  const answerers = getActiveAnswererNames();
-  return Boolean(state.currentSecretRank && answerers.some((name) => normalizeName(name) === normalizeName(playerName)));
+  return Boolean(state.currentSecretRank && isRoundTopicSetterName(playerName));
 }
 
 function canCurrentPlayerJudge() {
@@ -976,8 +1032,7 @@ function exportOnlineStateForPlayer(playerName = "") {
   const canSee =
     state.phase === "result" ||
     state.phase === "clear" ||
-    (state.currentSecretRank && getActiveAnswererNames()
-      .some((name) => normalizeName(name) === normalizeName(playerName)));
+    (state.currentSecretRank && normalizeName(playerName) === normalizeName(getRoundTopicSetterName()));
   if (!canSee) next.currentSecretRank = "";
   return next;
 }
@@ -997,10 +1052,7 @@ function applyRemoteAction(action) {
       startGame(payload);
       break;
     case "goAnswer":
-      state.secretVisible = false;
-      state.phase = "answer";
-      saveGame();
-      render();
+      goAnswerPhase(payload.playerName);
       break;
     case "submitAnswer":
       if (!payload.answer) return;
