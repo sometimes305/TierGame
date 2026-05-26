@@ -68,6 +68,7 @@ function createInitialState() {
     topicSetterName: "",
     answererName: "",
     answererNames: [],
+    activeAnswererName: "",
     answererIndex: 0,
     streak: 0,
     round: 1,
@@ -279,33 +280,41 @@ function renderPanel() {
   }
 
   if (state.phase === "discussion") {
+    const activeAnswerer = getActiveAnswererName();
+    const currentPlayerName = getCurrentPlayerName();
+    const isAnswerer = isRoundAnswererName(currentPlayerName);
+    const lockedByOther = Boolean(activeAnswerer && normalizeName(activeAnswerer) !== normalizeName(currentPlayerName));
+    const answerButtonText = lockedByOther ? `${activeAnswerer}が回答中` : "回答する";
     els.panelBody.append(
       playBar(
-        `${answerSummary()} のランクを相談中...`,
+        activeAnswerer ? `${activeAnswerer}が回答中...` : `${answerSummary()} のランクを相談中...`,
         [
           button("ヒント", useHint, "ghost", "button", !canUseHint()),
-          button("回答する", () => {
-            if (sendRemoteAction("goJudgement")) return;
-            state.phase = "judgement";
-            saveGame();
-            render();
-          }, "primary", "button", !canCurrentPlayerJudge())
+          button(answerButtonText, () => {
+            const playerName = getCurrentPlayerName();
+            if (sendRemoteAction("beginRankAnswer", { playerName })) return;
+            beginRankAnswer(playerName);
+          }, "primary", "button", !isAnswerer || lockedByOther)
         ],
-        [`ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
+        [`回答者 ${getActiveAnswererNames().join(" / ") || "なし"}`, `ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
       )
     );
     return;
   }
 
   if (state.phase === "judgement") {
+    const activeAnswerer = getActiveAnswererName();
     const children = [
       playBar(
-        state.selectedRank ? `${state.selectedRank}に決定しますか？` : "ホストがランクを選択中...",
+        canCurrentPlayerJudge()
+          ? (state.selectedRank ? `${state.selectedRank}に決定しますか？` : "ランクを選択してください")
+          : `${activeAnswerer || "回答者"}が回答中...`,
         [
-          button("決定", () => judge(state.selectedRank), "primary", "button", !state.selectedRank || !canCurrentPlayerJudge()),
+          button("決定", () => judge(state.selectedRank, getCurrentPlayerName()), "primary", "button", !state.selectedRank || !canCurrentPlayerJudge()),
           button("戻る", () => {
-            state.phase = "discussion";
-            render();
+            const playerName = getCurrentPlayerName();
+            if (sendRemoteAction("cancelRankAnswer", { playerName })) return;
+            cancelRankAnswer(playerName);
           }, "ghost", "button", !canCurrentPlayerJudge())
         ],
         [`ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
@@ -314,10 +323,11 @@ function renderPanel() {
     if (canCurrentPlayerJudge()) {
       children.push(createModal("ランク決定", [answersBox(), createRankPicker()], [
         button("キャンセル", () => {
-          state.phase = "discussion";
-          render();
+          const playerName = getCurrentPlayerName();
+          if (sendRemoteAction("cancelRankAnswer", { playerName })) return;
+          cancelRankAnswer(playerName);
         }, "ghost"),
-        button("OK", () => judge(state.selectedRank), "primary", "button", !state.selectedRank)
+        button("OK", () => judge(state.selectedRank, getCurrentPlayerName()), "primary", "button", !state.selectedRank)
       ]));
     }
     els.panelBody.append(createStack(children));
@@ -385,6 +395,7 @@ function prepareRound(options = {}) {
   state.currentAnswer = "";
   state.currentAnswers = [];
   state.answererNames = getAnswererNamesForTopicSetter(getRoundTopicSetterName());
+  state.activeAnswererName = "";
   state.judgedRank = "";
   state.selectedRank = "";
   state.eliminatedRanks = [];
@@ -409,9 +420,10 @@ function useHint() {
   render();
 }
 
-function judge(rank) {
+function judge(rank, playerName = getCurrentPlayerName()) {
   if (!rank || state.eliminatedRanks.includes(rank)) return;
-  if (sendRemoteAction("judge", { rank })) return;
+  if (!canPlayerControlRankAnswer(playerName)) return;
+  if (sendRemoteAction("judge", { rank, playerName })) return;
   const success = rank === state.currentSecretRank;
   state.judgedRank = rank;
   state.streak = success ? state.streak + 1 : 0;
@@ -426,6 +438,7 @@ function judge(rank) {
     judgedRank: rank,
     unlockedRanks
   };
+  state.activeAnswererName = "";
   state.phase = state.streak >= state.goalStreak ? "clear" : "result";
   saveGame();
   render();
@@ -570,10 +583,11 @@ function rotateTopicSetter() {
   state.topicSetterName = names[state.answererIndex];
   state.answererName = "";
   state.answererNames = getAnswererNamesForTopicSetter(state.topicSetterName);
+  state.activeAnswererName = "";
 }
 
 function showHowToPlay() {
-  alert("出題者だけが秘密ランクを見て、それに合う単語を入力します。回答者は秘密ランクを見ずに相談し、ホストがランクを選びます。秘密ランクと一致すれば連続正解、不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
+  alert("出題者だけが秘密ランクを見て、それに合う単語を入力します。回答者は出題者以外の全員です。回答者は秘密ランクを見ずに相談し、誰か1人が回答画面を開いてランクを選びます。秘密ランクと一致すれば連続正解、不一致でも単語はティア表に残り、連続数だけ0に戻ります。");
 }
 
 function saveGame() {
@@ -621,6 +635,10 @@ function normalizeLoadedState(loaded) {
   next.answererName = "";
   next.answererNames = Array.isArray(next.answererNames) ? next.answererNames.map(String).filter(Boolean) : [];
   next.answererNames = uniqueNames(next.answererNames).filter((name) => normalizeName(name) !== normalizeName(next.topicSetterName));
+  next.activeAnswererName = String(next.activeAnswererName || "");
+  if (next.phase !== "judgement" || (next.activeAnswererName && !isNameInList(next.activeAnswererName, next.answererNames))) {
+    next.activeAnswererName = "";
+  }
   next.currentAnswers = Array.isArray(next.currentAnswers) ? next.currentAnswers
     .filter(Boolean)
     .map((answer) => ({
@@ -699,6 +717,29 @@ function goAnswerPhase(playerName) {
   render();
 }
 
+function beginRankAnswer(playerName) {
+  const safeName = String(playerName || getCurrentPlayerName() || "").trim();
+  if (state.phase !== "discussion") return;
+  if (!isRoundAnswererName(safeName)) return;
+  const activeAnswerer = getActiveAnswererName();
+  if (activeAnswerer && normalizeName(activeAnswerer) !== normalizeName(safeName)) return;
+  state.activeAnswererName = safeName;
+  state.selectedRank = "";
+  state.phase = "judgement";
+  saveGame();
+  render();
+}
+
+function cancelRankAnswer(playerName) {
+  const safeName = String(playerName || getCurrentPlayerName() || "").trim();
+  if (!canPlayerControlRankAnswer(safeName)) return;
+  state.activeAnswererName = "";
+  state.selectedRank = "";
+  state.phase = "discussion";
+  saveGame();
+  render();
+}
+
 function getCurrentAnswers() {
   if (Array.isArray(state.currentAnswers) && state.currentAnswers.length) {
     return state.currentAnswers
@@ -732,6 +773,25 @@ function hasCurrentPlayerAnswered() {
 
 function isRoundTopicSetterName(playerName) {
   return normalizeName(playerName) === normalizeName(getRoundTopicSetterName());
+}
+
+function getActiveAnswererName() {
+  return String(state.activeAnswererName || "").trim();
+}
+
+function isRoundAnswererName(playerName) {
+  return isNameInList(playerName, getActiveAnswererNames());
+}
+
+function canPlayerControlRankAnswer(playerName) {
+  const safeName = String(playerName || "").trim();
+  const activeAnswerer = getActiveAnswererName();
+  return Boolean(
+    state.phase === "judgement" &&
+    activeAnswerer &&
+    normalizeName(activeAnswerer) === normalizeName(safeName) &&
+    isRoundAnswererName(safeName)
+  );
 }
 
 function allAnswerersSubmitted() {
@@ -891,7 +951,7 @@ function canCurrentPlayerViewSecret() {
 }
 
 function canCurrentPlayerJudge() {
-  return !window.TierOnline || !window.TierOnline.online || window.TierOnline.isHost();
+  return canPlayerControlRankAnswer(getCurrentPlayerName());
 }
 
 function normalizeName(name) {
@@ -913,6 +973,11 @@ function uniqueNames(names) {
     result.push(safeName);
   }
   return result;
+}
+
+function isNameInList(name, names) {
+  const key = normalizeName(name);
+  return Boolean(key && (names || []).some((item) => normalizeName(item) === key));
 }
 
 function resultMessage(type, text) {
@@ -1060,21 +1125,25 @@ function applyRemoteAction(action) {
       saveGame();
       render();
       break;
+    case "beginRankAnswer":
+      beginRankAnswer(payload.playerName);
+      break;
+    case "cancelRankAnswer":
+      cancelRankAnswer(payload.playerName);
+      break;
     case "chat":
       appendChat(payload.text, payload.playerName);
       saveGame();
       render();
       break;
     case "goJudgement":
-      state.phase = "judgement";
-      saveGame();
-      render();
+      beginRankAnswer(payload.playerName);
       break;
     case "useHint":
       useHint();
       break;
     case "judge":
-      if (payload.rank) judge(payload.rank);
+      if (payload.rank) judge(payload.rank, payload.playerName);
       break;
     case "nextRound":
       nextRound();
