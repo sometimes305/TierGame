@@ -1647,7 +1647,12 @@ function applySetupRoleUi(root) {
 }
 
 function canEditSetupControls() {
-  return Boolean(window.TierOnline && window.TierOnline.online && window.TierOnline.isHost());
+  const online = window.TierOnline;
+  return Boolean(
+    online &&
+    online.online &&
+    (online.host || (typeof online.isHost === "function" && online.isHost()))
+  );
 }
 
 function bindSetupFormBehavior(root) {
@@ -1681,13 +1686,13 @@ function bindSetupFormBehavior(root) {
   const applyMode = () => {
     const mode = root.querySelector('[name="topicMode"]:checked')?.value || "auto";
     const auto = mode === "auto";
-    const hostCanEdit = canEditSetupControls();
+    const roleAllowsEdit = canEditSetupControls() || topicModeInputs.some((input) => !input.disabled);
     [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
       const shouldLockPreview = auto && control.tagName !== "SELECT";
       control.readOnly = shouldLockPreview;
       control.toggleAttribute("readonly", shouldLockPreview);
       control.classList.toggle("readonly-preview", auto);
-      if (hostCanEdit) {
+      if (roleAllowsEdit) {
         control.disabled = control === initialRankInput && auto;
       } else {
         control.disabled = true;
@@ -1704,11 +1709,14 @@ function bindSetupFormBehavior(root) {
     if (input.dataset.boundSetupMode) return;
     input.dataset.boundSetupMode = "1";
     input.addEventListener("click", () => {
-      if (input.value !== "auto" || !input.checked || !canEditSetupControls()) return;
-      applyRandomAutoSetup();
-      applyMode();
-      syncLocalSetupState();
-      syncSetupConfig();
+      setTimeout(() => {
+        if (input.value === "auto" && input.checked && canEditSetupControls()) {
+          applyRandomAutoSetup();
+        }
+        applyMode();
+        syncLocalSetupState();
+        syncSetupConfig();
+      }, 0);
     });
     input.addEventListener("change", () => {
       state.topicMode = input.value;
