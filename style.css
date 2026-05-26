@@ -1157,6 +1157,37 @@ button:focus-visible {
   filter: grayscale(0.2);
 }
 
+.word-notice-dialog {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: #34322d;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.word-notice-dialog p {
+  margin: 0;
+}
+
+.announced-word {
+  display: inline-grid;
+  place-items: center;
+  min-width: min(100%, 220px);
+  max-width: 100%;
+  border: 3px solid rgba(68, 22, 202, 0.22);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 14px 18px;
+  color: var(--accent-strong);
+  font-size: clamp(24px, 7vw, 34px);
+  font-weight: 950;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
 .clear-panel {
   position: relative;
   display: grid;

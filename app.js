@@ -31,6 +31,7 @@ let applyingRemoteState = false;
 let phaseTimer = null;
 let scheduledPhaseKey = "";
 let lastShownHintNoticeId = "";
+let lastShownWordNoticeId = "";
 
 const els = {
   help: document.querySelector("#helpButton"),
@@ -86,6 +87,7 @@ function createInitialState() {
     selectedRank: "",
     eliminatedRanks: [],
     hintNotice: null,
+    wordNotice: null,
     secretVisible: false,
     unlockedRanks: [...INITIAL_RANKS],
     tierTable: Object.fromEntries(INITIAL_RANKS.map((rank) => [rank, []])),
@@ -161,6 +163,7 @@ function render() {
   if (window.TierOnline && window.TierOnline.bindControls) {
     window.TierOnline.bindControls();
   }
+  showPendingWordNotice();
   showPendingHintNotice();
 }
 
@@ -410,6 +413,7 @@ function prepareRound(options = {}) {
   state.selectedRank = "";
   state.eliminatedRanks = [];
   state.hintNotice = null;
+  state.wordNotice = null;
   state.secretVisible = false;
   state.lastResult = null;
   state.phase = options.showGameStart ? "gameStart" : "roundIntro";
@@ -728,6 +732,7 @@ function normalizeLoadedState(loaded) {
     turn: Math.max(0, Number(message.turn) || 0)
   })).filter((message) => message.text) : [];
   next.hintNotice = normalizeHintNotice(next.hintNotice, next.round);
+  next.wordNotice = normalizeWordNotice(next.wordNotice, next.round);
   next.answererIndex = Math.max(0, Number(next.answererIndex) || 0);
   next.streak = Math.max(0, Number(next.streak) || 0);
   next.round = Math.max(1, Number(next.round) || 1);
@@ -836,6 +841,12 @@ function submitAnswer(answer, playerName) {
   const nextAnswer = { playerName: safeName, word: safeWord };
   state.currentAnswers = [nextAnswer];
   state.currentAnswer = safeWord;
+  state.wordNotice = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    playerName: safeName.slice(0, 12),
+    word: safeWord,
+    round: state.round
+  };
   state.phase = "discussion";
 }
 
@@ -968,6 +979,48 @@ function normalizeHintNotice(notice, round = state.round) {
     id: String(notice.id || `${noticeRound}-${ranks.join("-")}`),
     playerName: String(notice.playerName || "誰か").slice(0, 12),
     ranks,
+    round: noticeRound
+  };
+}
+
+function showPendingWordNotice() {
+  const notice = normalizeWordNotice(state.wordNotice, state.round);
+  if (!notice || !notice.id || notice.id === lastShownWordNoticeId) return;
+  lastShownWordNoticeId = notice.id;
+  document.querySelectorAll(".word-notice-overlay").forEach((node) => node.remove());
+  let dialog = null;
+  const close = () => dialog && dialog.remove();
+  dialog = createModal("単語発表", [wordNoticePanel(notice)], [
+    button("OK", close, "primary")
+  ]);
+  dialog.classList.add("word-notice-overlay");
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  document.body.append(dialog);
+}
+
+function wordNoticePanel(notice) {
+  const box = document.createElement("div");
+  box.className = "word-notice-dialog";
+  box.innerHTML = `
+    <p><strong>${escapeHtml(notice.playerName || "出題者")}</strong> が単語を入力しました。</p>
+    <div class="announced-word">${escapeHtml(notice.word)}</div>
+    <p>この単語がどのランクっぽいか、みんなで相談してください。</p>
+  `;
+  return box;
+}
+
+function normalizeWordNotice(notice, round = state.round) {
+  if (!notice || typeof notice !== "object") return null;
+  const word = String(notice.word || "").trim().slice(0, 20);
+  if (!word) return null;
+  const noticeRound = Math.max(1, Number(notice.round) || round || 1);
+  if (Number(round) && noticeRound !== Number(round)) return null;
+  return {
+    id: String(notice.id || `${noticeRound}-${word}`),
+    playerName: String(notice.playerName || "出題者").slice(0, 12),
+    word,
     round: noticeRound
   };
 }
