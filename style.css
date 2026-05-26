@@ -515,8 +515,10 @@ h2 {
 .score-strip span {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .score-strip strong {
@@ -1043,8 +1045,21 @@ button:focus-visible {
   line-height: 1.7;
 }
 
+.rules-dialog section {
+  display: grid;
+  gap: 7px;
+}
+
+.rules-dialog h4 {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 950;
+}
+
 .rules-dialog p,
-.rules-dialog ol {
+.rules-dialog ol,
+.rules-dialog dl {
   margin: 0;
 }
 
@@ -1052,6 +1067,29 @@ button:focus-visible {
   display: grid;
   gap: 7px;
   padding-left: 1.3em;
+}
+
+.rules-dialog dl {
+  display: grid;
+  gap: 7px;
+}
+
+.rules-dialog dl div {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #faf8f1;
+  padding: 8px 10px;
+}
+
+.rules-dialog dt {
+  color: var(--accent-strong);
+  font-weight: 950;
+}
+
+.rules-dialog dd {
+  margin: 0;
 }
 
 .clear-panel {

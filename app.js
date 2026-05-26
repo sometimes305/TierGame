@@ -597,15 +597,37 @@ function showHowToPlay() {
   const content = document.createElement("div");
   content.className = "rules-dialog";
   content.innerHTML = `
-    <p>出題者だけが秘密ランクを見て、そのランクに合う単語を入力します。</p>
-    <ol>
-      <li>全員でお題とティア表を見ます。</li>
-      <li>出題者が秘密ランクに合う単語を出します。</li>
-      <li>回答者は出題者以外の全員です。秘密ランクは見えません。</li>
-      <li>相談して、回答者の誰か1人がランクを選びます。</li>
-      <li>秘密ランクと一致すれば連続正解。不一致でも単語はティア表に残ります。</li>
-    </ol>
-    <p>ゴールの連続正解数に届いたらクリアです。</p>
+    <section>
+      <h4>目的</h4>
+      <p>全員で相談しながら、設定した<strong>連続正解目標</strong>まで正解を積み上げる協力ゲームです。不正解になってもゲームオーバーはなく、連続数だけ0に戻ります。</p>
+    </section>
+    <section>
+      <h4>役割</h4>
+      <dl>
+        <div><dt>出題者</dt><dd>秘密ランクを見て、そのランクに合う単語を入力する人です。</dd></div>
+        <div><dt>回答者</dt><dd>出題者以外の全員です。秘密ランクは見えません。相談後、誰か1人が回答画面を開いてランクを選びます。</dd></div>
+        <div><dt>ホスト</dt><dd>ルール設定とゲーム開始を担当します。ゲーム中の回答者とは別の役割です。</dd></div>
+      </dl>
+    </section>
+    <section>
+      <h4>ラウンドの流れ</h4>
+      <ol>
+        <li>今回の出題者が発表されます。</li>
+        <li>出題者だけに秘密ランクが表示されます。</li>
+        <li>出題者が「そのランクっぽい」単語を入力します。強すぎても弱すぎても伝わりにくいので、ちょうど感が大事です。</li>
+        <li>単語が公開されたら、回答者全員でどのランクか相談します。</li>
+        <li>回答者の誰か1人が「回答する」を押してランクを選びます。その間、他の回答者の回答ボタンはロックされます。</li>
+        <li>秘密ランクと選んだランクが一致したら連続正解、不一致なら連続数が0に戻ります。</li>
+      </ol>
+    </section>
+    <section>
+      <h4>ティア表とヒント</h4>
+      <p>出た単語は正解・不正解に関係なくティア表に残ります。ラウンドが進むほど、過去の単語との比較で推理しやすくなります。ヒントは秘密ランクではない候補を2つ消します。</p>
+    </section>
+    <section>
+      <h4>クリア条件</h4>
+      <p><strong>連続正解目標</strong>に到達したらクリアです。途中で外しても、育ったティア表は次の推理材料になります。</p>
+    </section>
   `;
   let dialog = null;
   const close = () => dialog && dialog.remove();
@@ -950,7 +972,7 @@ function resultPanel(result) {
     <div>${answerHtml}</div>
     <p>正解ランク <strong>${result.secretRank}</strong></p>
     <p>判定ランク <strong>${result.judgedRank}</strong></p>
-    <p>クリアまであと <strong>${remaining}</strong> 連続正解</p>
+    <p>連続正解目標まであと <strong>${remaining}</strong></p>
     ${unlocked}
   `;
   return box;
@@ -969,7 +991,7 @@ function clearCelebrationPanel() {
   const title = document.createElement("strong");
   title.textContent = "連続正解達成！";
   const message = document.createElement("p");
-  message.textContent = `${state.goalStreak}問連続で当てきりました。ティア表、かなり育っています。`;
+  message.textContent = `連続正解目標の${state.goalStreak}問に到達しました。ティア表、かなり育っています。`;
   const stats = document.createElement("div");
   stats.className = "clear-stats";
   stats.append(metaBox("連続正解", `${state.streak}`), metaBox("登録ワード", `${countWords()}`), metaBox("ラウンド", `${state.round}`));
@@ -1359,19 +1381,41 @@ function bindSetupFormBehavior(root) {
   const topicInput = root.querySelector("#topicInput");
   const startWordInput = root.querySelector("#startWordInput");
   const initialRankInput = root.querySelector("#initialRankInput");
+  const goalInput = root.querySelector("#goalInput");
+  const hintInput = root.querySelector("#hintCountInput");
   const topicModeInputs = [...root.querySelectorAll('[name="topicMode"]')];
+  const syncLocalSetupState = () => {
+    state.topicMode = root.querySelector('[name="topicMode"]:checked')?.value || state.topicMode || "auto";
+    state.topic = topicInput ? topicInput.value.trim() : state.topic;
+    state.startWord = startWordInput ? startWordInput.value.trim() : state.startWord;
+    state.initialRank = initialRankInput ? initialRankInput.value : state.initialRank;
+    state.goalStreak = goalInput ? clamp(Number(goalInput.value) || state.goalStreak, 1, 20) : state.goalStreak;
+    state.hintCount = hintInput ? clamp(Number(hintInput.value) || 0, 0, 20) : state.hintCount;
+    state.remainingHints = state.hintCount;
+  };
   const applyMode = () => {
     const mode = root.querySelector('[name="topicMode"]:checked')?.value || "auto";
     const auto = mode === "auto";
+    const hostCanEdit = Boolean(window.TierOnline && window.TierOnline.isHost());
     [topicInput, startWordInput, initialRankInput].filter(Boolean).forEach((control) => {
-      control.readOnly = auto && control.tagName !== "SELECT";
+      const shouldLockPreview = auto && control.tagName !== "SELECT";
+      control.readOnly = shouldLockPreview;
+      control.toggleAttribute("readonly", shouldLockPreview);
       control.classList.toggle("readonly-preview", auto);
+      if (hostCanEdit) control.disabled = control === initialRankInput && auto;
     });
   };
+  [topicInput, startWordInput, initialRankInput, goalInput, hintInput].filter(Boolean).forEach((control) => {
+    if (control.dataset.boundSetupCache) return;
+    control.dataset.boundSetupCache = "1";
+    control.addEventListener("input", syncLocalSetupState);
+    control.addEventListener("change", syncLocalSetupState);
+  });
   topicModeInputs.forEach((input) => {
     if (input.dataset.boundSetupMode) return;
     input.dataset.boundSetupMode = "1";
     input.addEventListener("change", () => {
+      state.topicMode = input.value;
       if (input.value === "auto" && input.checked) {
         const auto = pick(AUTO_SETUPS);
         if (topicInput) topicInput.value = auto.topic;
@@ -1379,10 +1423,12 @@ function bindSetupFormBehavior(root) {
         if (initialRankInput) initialRankInput.value = auto.initialRank;
       }
       applyMode();
+      syncLocalSetupState();
       syncSetupConfig();
     });
   });
   applyMode();
+  syncLocalSetupState();
 }
 
 function readSetupForm(root = document) {

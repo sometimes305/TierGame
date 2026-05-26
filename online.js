@@ -35,7 +35,6 @@
       const joinNameInput = document.querySelector("#usernameJoin");
       const goCreateButton = document.querySelector("#goCreateRoomButton");
       const goJoinButton = document.querySelector("#goJoinRoomButton");
-      const rulesButton = document.querySelector("#showRulesButton");
       const createButton = document.querySelector("#createRoomButton");
       const refreshButton = document.querySelector("#refreshRoomsButton");
       const joinButton = document.querySelector("#joinRoomButton");
@@ -64,13 +63,6 @@
         goJoinButton.addEventListener("click", () => {
           this.showOnlineScreen("join");
           this.fetchRoomList();
-        });
-      }
-      if (rulesButton && !rulesButton.dataset.boundOnline) {
-        rulesButton.dataset.boundOnline = "1";
-        rulesButton.addEventListener("click", () => {
-          const rules = document.querySelector("#rulesBox");
-          if (rules) rules.classList.toggle("hidden");
         });
       }
       document.querySelectorAll("[data-online-back]").forEach((button) => {
