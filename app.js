@@ -1,7 +1,7 @@
 const STORAGE_KEY = "tier-sense-state-v1";
 const CHAT_HEIGHT_KEY = "tier-sense-chat-height";
 const CHAT_COLLAPSED_KEY = "tier-sense-chat-collapsed";
-const GAME_TITLE = "みんなでティア表ゲーム";
+const GAME_TITLE = "みんなでTier表ゲーム";
 const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
 const AUTO_SETUPS = [
@@ -660,12 +660,12 @@ function showHowToPlay() {
       </ol>
     </section>
     <section>
-      <h4>ティア表とヒント</h4>
-      <p>出た単語は正解・不正解に関係なくティア表に残ります。ラウンドが進むほど、過去の単語との比較で推理しやすくなります。ヒントは秘密ランクではない候補を2つ消します。</p>
+      <h4>Tier表とヒント</h4>
+      <p>出た単語は正解・不正解に関係なくTier表に残ります。ラウンドが進むほど、過去の単語との比較で推理しやすくなります。ヒントは秘密ランクではない候補を2つ消します。</p>
     </section>
     <section>
       <h4>クリア条件</h4>
-      <p><strong>連続正解目標</strong>に到達したらクリアです。途中で外しても、育ったティア表は次の推理材料になります。</p>
+      <p><strong>連続正解目標</strong>に到達したらクリアです。途中で外しても、育ったTier表は次の推理材料になります。</p>
     </section>
   `;
   let dialog = null;
@@ -1238,7 +1238,7 @@ function clearCelebrationPanel() {
   const title = document.createElement("strong");
   title.textContent = "連続正解達成！";
   const message = document.createElement("p");
-  message.textContent = `連続正解目標の${state.goalStreak}問に到達しました。ティア表、かなり育っています。`;
+  message.textContent = `連続正解目標の${state.goalStreak}問に到達しました。Tier表、かなり育っています。`;
   const stats = document.createElement("div");
   stats.className = "clear-stats";
   stats.append(metaBox("連続正解", `${state.streak}`), metaBox("登録ワード", `${countWords()}`), metaBox("ラウンド", `${state.round}`));
