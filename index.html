@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>みんなでTier表ゲーム</title>
-    <link rel="stylesheet" href="style.css?v=20260529-setter-secret" />
+    <link rel="stylesheet" href="style.css?v=20260529-title-hero" />
     <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
@@ -149,8 +149,29 @@
             </div>
           </div>
           <div class="online-screen" data-online-screen="home">
-            <button type="button" id="goCreateRoomButton" class="primary large-menu-button">部屋を作る</button>
-            <button type="button" id="goJoinRoomButton" class="large-menu-button">部屋に参加する</button>
+            <div class="title-hero" aria-label="タイトルビジュアル">
+              <div class="title-hero-ranks" aria-hidden="true">
+                <span class="rank-S">S</span>
+                <span class="rank-A">A</span>
+                <span class="rank-B">B</span>
+                <span class="rank-C">C</span>
+                <span class="rank-D">D</span>
+              </div>
+              <p>その単語、何ランク？</p>
+              <div class="title-word-samples" aria-hidden="true">
+                <span>カレー</span>
+                <span>美容師</span>
+                <span>ハーゲンダッツ</span>
+              </div>
+            </div>
+            <button type="button" id="goCreateRoomButton" class="primary large-menu-button">
+              <span>部屋を作る</span>
+              <small>ホストとしてルールを決める</small>
+            </button>
+            <button type="button" id="goJoinRoomButton" class="large-menu-button">
+              <span>部屋に参加する</span>
+              <small>ルームIDで合流する</small>
+            </button>
           </div>
           <div class="online-screen hidden" data-online-screen="create">
             <div class="screen-title-row">
@@ -210,7 +231,7 @@
       </form>
     </template>
 
-    <script src="app.js?v=20260529-setter-secret"></script>
-    <script src="online.js?v=20260529-setter-secret"></script>
+    <script src="app.js?v=20260529-title-hero"></script>
+    <script src="online.js?v=20260529-title-hero"></script>
   </body>
 </html>
