@@ -89,6 +89,7 @@
         exitButton.dataset.boundOnline = "1";
         exitButton.addEventListener("click", () => this.exitRoom());
       }
+      this.syncOnlineScreenState();
       this.refreshProfile();
       this.refreshStatus();
       this.renderRoomUi();
@@ -98,8 +99,14 @@
       document.querySelectorAll("[data-online-screen]").forEach((screen) => {
         screen.classList.toggle("hidden", screen.dataset.onlineScreen !== name);
       });
+      document.body.dataset.onlineScreen = name;
       this.statusMessage = "";
       this.refreshStatus();
+    },
+
+    syncOnlineScreenState() {
+      const visible = document.querySelector("[data-online-screen]:not(.hidden)");
+      document.body.dataset.onlineScreen = visible ? visible.dataset.onlineScreen : "home";
     },
 
     refreshProfile() {

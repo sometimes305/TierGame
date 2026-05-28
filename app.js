@@ -67,6 +67,11 @@ const els = {
 };
 
 els.help.addEventListener("click", showHowToPlay);
+document.addEventListener("click", (event) => {
+  const helpButton = event.target.closest("[data-help-button]");
+  if (!helpButton) return;
+  showHowToPlay();
+});
 if (els.chatForm) {
   els.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>みんなでTier表ゲーム</title>
-    <link rel="stylesheet" href="style.css?v=20260529-title-hero" />
+    <link rel="stylesheet" href="style.css?v=20260529-home-title" />
     <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
@@ -157,12 +157,8 @@
                 <span class="rank-C">C</span>
                 <span class="rank-D">D</span>
               </div>
-              <p>その単語、何ランク？</p>
-              <div class="title-word-samples" aria-hidden="true">
-                <span>カレー</span>
-                <span>美容師</span>
-                <span>ハーゲンダッツ</span>
-              </div>
+              <p class="title-hero-title">みんなでTier表ゲーム</p>
+              <p class="title-hero-subtitle">その単語、何ランク？</p>
             </div>
             <button type="button" id="goCreateRoomButton" class="primary large-menu-button">
               <span>部屋を作る</span>
@@ -171,6 +167,10 @@
             <button type="button" id="goJoinRoomButton" class="large-menu-button">
               <span>部屋に参加する</span>
               <small>ルームIDで合流する</small>
+            </button>
+            <button type="button" class="large-menu-button help-menu-button" data-help-button>
+              <span>遊び方を見る</span>
+              <small>出題者と回答者の流れを確認する</small>
             </button>
           </div>
           <div class="online-screen hidden" data-online-screen="create">
@@ -231,7 +231,7 @@
       </form>
     </template>
 
-    <script src="app.js?v=20260529-title-hero"></script>
-    <script src="online.js?v=20260529-title-hero"></script>
+    <script src="app.js?v=20260529-home-title"></script>
+    <script src="online.js?v=20260529-home-title"></script>
   </body>
 </html>
