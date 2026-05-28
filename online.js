@@ -213,6 +213,26 @@
       return { id: String(id), name: String(name), icon };
     },
 
+    getGameParticipantNames() {
+      const names = [];
+      const pushName = (name) => {
+        const safeName = String(name || "").trim();
+        if (!safeName) return;
+        if (!names.some((item) => item.toLowerCase() === safeName.toLowerCase())) names.push(safeName);
+      };
+
+      pushName(this.localPlayerName);
+      if (this.host) {
+        this.conns.forEach((conn) => {
+          if (conn && conn.open && conn._playerName) pushName(conn._playerName);
+        });
+        return names;
+      }
+
+      this.participants.forEach((player) => pushName(player.name));
+      return names;
+    },
+
     makeHostPeerId(roomId) {
       let rid = String(roomId || "").replace(/[^a-zA-Z0-9_-]/g, "");
       if (!rid) rid = "room";
@@ -328,6 +348,8 @@
           icon: conn._playerIcon
         });
         conn.send({ type: "state", state: this.stateForPlayer(conn._playerName) });
+        const secret = this.secretForPlayer(conn._playerName);
+        if (secret) conn.send({ type: "secret", secret });
         conn.send({ type: "config", settings: window.TierGame.readSetupForm ? window.TierGame.readSetupForm() : {} });
         this.refreshStatus(`${conn._playerName}が入室しました`);
         return;
@@ -341,6 +363,9 @@
       if (msg.type === "state" || msg.type === "rt_sync") {
         window.TierGame.importState(msg.state || msg.data || msg);
       }
+      if (msg.type === "secret" && window.TierGame.importSecret) {
+        window.TierGame.importSecret(msg.secret || msg.data || msg);
+      }
       if (msg.type === "config" && window.TierGame.previewSetup) {
         window.TierGame.previewSetup(msg.settings || {});
       }
@@ -352,6 +377,8 @@
         if (!conn || !conn.open) return;
         try {
           conn.send({ type: "state", state: this.stateForPlayer(conn._playerName, state) });
+          const secret = this.secretForPlayer(conn._playerName);
+          if (secret) conn.send({ type: "secret", secret });
         } catch {}
       });
     },
@@ -361,6 +388,13 @@
         return window.TierGame.exportStateForPlayer(playerName || "");
       }
       return fallbackState || (window.TierGame && window.TierGame.exportState ? window.TierGame.exportState() : {});
+    },
+
+    secretForPlayer(playerName) {
+      if (window.TierGame && typeof window.TierGame.exportSecretForPlayer === "function") {
+        return window.TierGame.exportSecretForPlayer(playerName || "");
+      }
+      return null;
     },
 
     broadcastConfig(settings) {

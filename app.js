@@ -276,6 +276,16 @@ function renderPanel() {
 
   if (state.phase === "answer") {
     if (canCurrentPlayerViewSecret()) {
+      if (!state.currentSecretRank) {
+        els.panelBody.append(createPhaseCard(
+          "単語入力",
+          "秘密ランクを同期しています",
+          [createSetterPromptCard(true)],
+          [],
+          [`ワード数 ${countWords()} / 50`]
+        ));
+        return;
+      }
       const alreadyAnswered = hasCurrentPlayerAnswered();
       const form = document.createElement("form");
       form.className = "word-input-form";
@@ -585,6 +595,10 @@ function pickAutoSetup(exclude = {}) {
 
 function getParticipantNames() {
   const online = window.TierOnline;
+  if (online && typeof online.getGameParticipantNames === "function") {
+    const realtimeNames = uniqueNames(online.getGameParticipantNames());
+    if (realtimeNames.length) return realtimeNames;
+  }
   const names = online && Array.isArray(online.participants)
     ? online.participants.map((player) => player.name).filter(Boolean)
     : [];
@@ -826,17 +840,19 @@ function createIntroScreen(title, detail = "") {
 }
 
 function createSetterPromptCard(compact = false) {
+  const secretRank = state.currentSecretRank || "?";
+  const isSecretReady = Boolean(state.currentSecretRank);
   const card = document.createElement("div");
   card.className = compact ? "setter-prompt compact" : "setter-prompt";
   const instruction = document.createElement("div");
   instruction.className = "setter-instruction";
-  instruction.innerHTML = `<strong class="target-rank-badge rank-${state.currentSecretRank}">${escapeHtml(state.currentSecretRank)}</strong><span>に適した単語を考えて入力してください。</span>`;
+  instruction.innerHTML = `<strong class="target-rank-badge ${isSecretReady ? `rank-${state.currentSecretRank}` : "rank-pending"}">${escapeHtml(secretRank)}</strong><span>${isSecretReady ? "に適した単語を考えて入力してください。" : "秘密ランクを同期しています。"}</span>`;
   const actionRow = document.createElement("div");
   actionRow.className = "setter-action-row";
   actionRow.append(button("入力する", () => {
     if (sendRemoteAction("goAnswer", { playerName: getCurrentPlayerName() })) return;
     goAnswerPhase(getCurrentPlayerName());
-  }, "primary setter-input-button"));
+  }, "primary setter-input-button", "button", !isSecretReady));
   const wordCount = document.createElement("div");
   wordCount.className = "setter-word-count";
   wordCount.textContent = `ワード数 ${countWords()} / 50`;
@@ -858,6 +874,10 @@ function createWaitingPanel(text) {
 
 function goAnswerPhase(playerName) {
   if (!isRoundTopicSetterName(playerName || getCurrentPlayerName())) return;
+  if (!state.currentSecretRank) {
+    render();
+    return;
+  }
   state.secretVisible = false;
   state.phase = "answer";
   saveGame();
@@ -1275,7 +1295,7 @@ function countWords() {
 
 function canCurrentPlayerViewSecret() {
   const playerName = getCurrentPlayerName();
-  return Boolean(state.currentSecretRank && isRoundTopicSetterName(playerName));
+  return isRoundTopicSetterName(playerName);
 }
 
 function canCurrentPlayerJudge() {
@@ -1497,10 +1517,43 @@ function exportOnlineStateForPlayer(playerName = "") {
   return next;
 }
 
+function exportSecretForPlayer(playerName = "") {
+  if (!state.currentSecretRank) return null;
+  if (normalizeName(playerName) !== normalizeName(getRoundTopicSetterName())) return null;
+  return {
+    round: state.round,
+    phase: state.phase,
+    topicSetterName: getRoundTopicSetterName(),
+    currentSecretRank: state.currentSecretRank
+  };
+}
+
 function importOnlineState(nextState) {
   applyingRemoteState = true;
-  state = normalizeLoadedState(nextState);
+  const previousState = state;
+  const normalized = normalizeLoadedState(nextState);
+  if (
+    !normalized.currentSecretRank &&
+    previousState.currentSecretRank &&
+    normalized.round === previousState.round &&
+    normalizeName(normalized.topicSetterName) === normalizeName(previousState.topicSetterName) &&
+    normalizeName(getCurrentPlayerName()) === normalizeName(normalized.topicSetterName)
+  ) {
+    normalized.currentSecretRank = previousState.currentSecretRank;
+  }
+  state = normalized;
   applyingRemoteState = false;
+  render();
+}
+
+function importSecret(secret) {
+  if (!secret || typeof secret !== "object") return;
+  const rank = String(secret.currentSecretRank || "").trim();
+  if (!ALL_RANKS.includes(rank)) return;
+  if (Number(secret.round) !== Number(state.round)) return;
+  if (normalizeName(secret.topicSetterName) !== normalizeName(getRoundTopicSetterName())) return;
+  if (normalizeName(getCurrentPlayerName()) !== normalizeName(getRoundTopicSetterName())) return;
+  state.currentSecretRank = rank;
   render();
 }
 
@@ -1596,6 +1649,8 @@ window.TierGame = {
     render();
   },
   exportStateForPlayer: exportOnlineStateForPlayer,
+  exportSecretForPlayer,
+  importSecret,
   readSetupForm() {
     return readSetupForm(document);
   },

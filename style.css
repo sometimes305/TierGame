@@ -816,6 +816,11 @@ body[data-phase="setup"][data-role="guest"] .control-panel::before {
   background: #5e6268;
 }
 
+.rank-pending {
+  background:
+    repeating-linear-gradient(135deg, #5e6268 0 8px, #74787e 8px 16px);
+}
+
 .word-cell {
   display: flex;
   flex-wrap: wrap;
