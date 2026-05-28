@@ -96,16 +96,18 @@
     },
 
     showOnlineScreen(name) {
-      document.querySelectorAll("[data-online-screen]").forEach((screen) => {
+      document.querySelectorAll(".online-screen[data-online-screen]").forEach((screen) => {
         screen.classList.toggle("hidden", screen.dataset.onlineScreen !== name);
       });
+      document.body.classList.remove("hidden");
       document.body.dataset.onlineScreen = name;
       this.statusMessage = "";
       this.refreshStatus();
     },
 
     syncOnlineScreenState() {
-      const visible = document.querySelector("[data-online-screen]:not(.hidden)");
+      const visible = document.querySelector(".online-screen[data-online-screen]:not(.hidden)");
+      document.body.classList.remove("hidden");
       document.body.dataset.onlineScreen = visible ? visible.dataset.onlineScreen : "home";
     },
 
