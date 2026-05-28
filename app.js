@@ -3,6 +3,18 @@ const CHAT_HEIGHT_KEY = "tier-sense-chat-height";
 const CHAT_COLLAPSED_KEY = "tier-sense-chat-collapsed";
 const GAME_TITLE = "みんなでTier表ゲーム";
 const ALL_RANKS = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "G"];
+const RANK_THEMES = {
+  SSS: { color: "#6f312b", tint: "rgba(111, 49, 43, 0.12)" },
+  SS: { color: "#6f312b", tint: "rgba(111, 49, 43, 0.12)" },
+  S: { color: "#a34937", tint: "rgba(163, 73, 55, 0.12)" },
+  A: { color: "#c7832d", tint: "rgba(199, 131, 45, 0.14)" },
+  B: { color: "#2d7a61", tint: "rgba(45, 122, 97, 0.13)" },
+  C: { color: "#3b6f9f", tint: "rgba(59, 111, 159, 0.12)" },
+  D: { color: "#665f86", tint: "rgba(102, 95, 134, 0.13)" },
+  E: { color: "#5e6268", tint: "rgba(94, 98, 104, 0.12)" },
+  F: { color: "#5e6268", tint: "rgba(94, 98, 104, 0.12)" },
+  G: { color: "#5e6268", tint: "rgba(94, 98, 104, 0.12)" }
+};
 const INITIAL_RANKS = ["S", "A", "B", "C", "D"];
 const AUTO_SETUPS = [
   { topic: "強そうな動物", startWord: "オオカミ", initialRank: "B" },
@@ -241,21 +253,27 @@ function renderPanel() {
   if (operationStatus) els.panelBody.append(operationStatus);
 
   if (state.phase === "gameStart") {
-    els.panelBody.append(createIntroScreen("ゲーム開始"));
+    els.panelBody.append(createIntroScreen("ゲーム開始", "最初のラウンドを準備しています"));
     return;
   }
 
   if (state.phase === "roundIntro") {
-    els.panelBody.append(createIntroScreen(`今回の出題者は ${getRoundTopicSetterName() || "未定"}`));
+    els.panelBody.append(createIntroScreen("今回の出題者は", getRoundTopicSetterName() || "未定"));
     return;
   }
 
   if (state.phase === "secret") {
-    if (canCurrentPlayerViewSecret()) {
-      els.panelBody.append(createSetterPromptCard());
-    } else {
-      els.panelBody.append(createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`));
-    }
+    const isSetter = canCurrentPlayerViewSecret();
+    const body = isSetter
+      ? [createSetterPromptCard()]
+      : [createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`)];
+    els.panelBody.append(createPhaseCard(
+      "出題準備",
+      isSetter ? "秘密ランクに合う単語を考えます" : "出題者の入力を待っています",
+      body,
+      [],
+      [`ワード数 ${countWords()} / 50`]
+    ));
     return;
   }
 
@@ -281,7 +299,7 @@ function renderPanel() {
         saveGame();
         render();
       });
-      const modal = createModal(alreadyAnswered ? "提出済み" : "単語入力", [form], [
+      const modal = createModal(alreadyAnswered ? "提出済み" : "単語入力", [createOperationStatus(), form].filter(Boolean), [
         button("戻る", () => {
           state.phase = "secret";
           render();
@@ -290,11 +308,17 @@ function renderPanel() {
       ]);
       modal.classList.add("word-input-overlay");
       els.panelBody.append(createStack([
-        createSetterPromptCard(true),
+        createPhaseCard("単語入力", "出題者だけが単語を入力できます", [createSetterPromptCard(true)], [], [`ワード数 ${countWords()} / 50`]),
         modal
       ]));
     } else {
-      els.panelBody.append(createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`));
+      els.panelBody.append(createPhaseCard(
+        "単語入力",
+        "出題者の入力を待っています",
+        [createWaitingPanel(`${getRoundTopicSetterName() || "出題者"}が出題を考えています`)],
+        [],
+        [`ワード数 ${countWords()} / 50`]
+      ));
     }
     return;
   }
@@ -305,8 +329,7 @@ function renderPanel() {
     const isAnswerer = isRoundAnswererName(currentPlayerName);
     const lockedByOther = Boolean(activeAnswerer && normalizeName(activeAnswerer) !== normalizeName(currentPlayerName));
     const answerButtonText = lockedByOther ? `${activeAnswerer}が回答中` : "回答する";
-    els.panelBody.append(
-      playBar(
+    const discussionBar = playBar(
         activeAnswerer ? `${activeAnswerer}が回答中...` : `${answerSummary()} のランクを相談中...`,
         [
           button("ヒント", showHintConfirmDialog, "ghost", "button", !canUseHint()),
@@ -317,15 +340,18 @@ function renderPanel() {
           }, "primary", "button", !isAnswerer || lockedByOther)
         ],
         [`回答者 ${getActiveAnswererNames().join(" / ") || "なし"}`, `ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
-      )
     );
+    els.panelBody.append(createPhaseCard(
+      "相談",
+      `${answerSummary()} のランクをみんなで相談中`,
+      [answersBox(), discussionBar]
+    ));
     return;
   }
 
   if (state.phase === "judgement") {
     const activeAnswerer = getActiveAnswererName();
-    const children = [
-      playBar(
+    const judgementBar = playBar(
         canCurrentPlayerJudge()
           ? (state.selectedRank ? `${state.selectedRank}に決定しますか？` : "ランクを選択してください")
           : `${activeAnswerer || "回答者"}が回答中...`,
@@ -338,6 +364,12 @@ function renderPanel() {
           }, "ghost", "button", !canCurrentPlayerJudge())
         ],
         [`ヒント ${state.remainingHints}/${state.hintCount}`, `ワード数 ${countWords()} / 50`]
+    );
+    const children = [
+      createPhaseCard(
+        "判定",
+        canCurrentPlayerJudge() ? "表からランクを選んで決定します" : "回答者のランク選択を待っています",
+        [judgementBar]
       )
     ];
     if (canCurrentPlayerJudge()) {
@@ -357,14 +389,8 @@ function renderPanel() {
   if (state.phase === "result") {
     const result = state.lastResult;
     els.panelBody.append(
-      createStack([
-        playBar("次の行動を決めてください。", [
-          button("次へ", nextRound, "primary"),
-          button("リセット", resetGame, "danger")
-        ], [`ワード数 ${countWords()} / 50`]),
-        createModal("回答結果", [resultPanel(result)], [
-          button("次へ", nextRound, "primary")
-        ])
+      createModal("回答結果", [createOperationStatus(), resultPanel(result)].filter(Boolean), [
+        button("次へ", nextRound, "primary")
       ])
     );
     return;
@@ -372,13 +398,8 @@ function renderPanel() {
 
   if (state.phase === "clear") {
     els.panelBody.append(
-      createStack([
-        playBar("連続正解達成！ゲームクリアです。", [
-          button("もう一度遊ぶ", resetGame, "primary")
-        ], [`${state.goalStreak}連続正解`, `ワード数 ${countWords()} / 50`]),
-        createModal("CLEAR!", [clearCelebrationPanel()], [
-          button("もう一度遊ぶ", resetGame, "primary")
-        ])
+      createModal("CLEAR!", [createOperationStatus(), clearCelebrationPanel()].filter(Boolean), [
+        button("もう一度遊ぶ", resetGame, "primary")
       ])
     );
   }
@@ -764,12 +785,45 @@ function createSecretBox(canView) {
   return box;
 }
 
-function createIntroScreen(text) {
+function createPhaseCard(title, description, children = [], actions = [], meta = []) {
+  const card = document.createElement("section");
+  card.className = "phase-card";
+  const head = document.createElement("div");
+  head.className = "phase-card-head";
+  head.innerHTML = `
+    <span>${escapeHtml(PHASE_LABELS[state.phase] || "進行")}</span>
+    <h3>${escapeHtml(title)}</h3>
+    <p>${escapeHtml(description)}</p>
+  `;
+  const body = document.createElement("div");
+  body.className = "phase-card-body";
+  for (const child of children.filter(Boolean)) body.append(child);
+  card.append(head, body);
+  if (actions.length) {
+    const footer = document.createElement("div");
+    footer.className = "phase-card-actions";
+    for (const action of actions) footer.append(action);
+    card.append(footer);
+  }
+  if (meta.length) {
+    const metaLine = document.createElement("div");
+    metaLine.className = "phase-card-meta";
+    metaLine.textContent = meta.join(" / ");
+    card.append(metaLine);
+  }
+  return card;
+}
+
+function createIntroScreen(title, detail = "") {
   const overlay = document.createElement("div");
   overlay.className = "round-intro-overlay";
   const card = document.createElement("div");
   card.className = "round-intro-card";
-  card.textContent = text;
+  card.innerHTML = `
+    <span class="round-intro-eyebrow">${escapeHtml(PHASE_LABELS[state.phase] || "進行")}</span>
+    <strong>${escapeHtml(title)}</strong>
+    ${detail ? `<em>${escapeHtml(detail)}</em>` : ""}
+  `;
   overlay.append(card);
   return overlay;
 }
@@ -825,6 +879,12 @@ function getOperationStatus() {
   const isSetter = canCurrentPlayerViewSecret();
   const isJudge = canCurrentPlayerJudge();
 
+  if (state.phase === "gameStart") {
+    return { label: "開始", title: "ゲーム開始", detail: "最初の出題者を発表します。" };
+  }
+  if (state.phase === "roundIntro") {
+    return { label: "出題者発表", title: `今回の出題者は ${setter}`, detail: "この後、出題者だけに秘密ランクが表示されます。" };
+  }
   if (state.phase === "secret") {
     return isSetter
       ? { label: "あなたの番", title: "秘密ランクを見て単語を考える", detail: "入力するを押すと単語入力に進みます。", tone: "active" }
@@ -851,6 +911,9 @@ function getOperationStatus() {
   }
   if (state.phase === "result") {
     return { label: "結果", title: "結果を確認中", detail: "単語、秘密ランク、選ばれたランクを見比べます。" };
+  }
+  if (state.phase === "clear") {
+    return { label: "クリア", title: "連続正解目標を達成", detail: "もう一度遊ぶとルール設定に戻ります。", tone: "active" };
   }
   return null;
 }
@@ -1072,6 +1135,7 @@ function wordNoticePanel(notice) {
   const box = document.createElement("div");
   box.className = "word-notice-dialog";
   box.innerHTML = `
+    <span class="word-notice-eyebrow">単語発表</span>
     <p><strong>${escapeHtml(notice.playerName || "出題者")}</strong> が単語を入力しました。</p>
     <div class="announced-word">${escapeHtml(notice.word)}</div>
     <p>この単語がどのランクっぽいか、みんなで相談してください。</p>
@@ -1192,6 +1256,9 @@ function createSelectedRankFocus() {
 function resultPanel(result) {
   const box = document.createElement("div");
   box.className = `result-panel ${result.success ? "success" : "failure"}`;
+  const rankTheme = getRankTheme(result.judgedRank || result.secretRank);
+  box.style.setProperty("--result-rank-color", rankTheme.color);
+  box.style.setProperty("--result-rank-tint", rankTheme.tint);
   const remaining = Math.max(0, state.goalStreak - state.streak);
   const words = Array.isArray(result.answers) && result.answers.length
     ? result.answers.map((answer) => answer.word).filter(Boolean)
@@ -1223,6 +1290,10 @@ function resultPanel(result) {
     ${unlocked}
   `;
   return box;
+}
+
+function getRankTheme(rank) {
+  return RANK_THEMES[rank] || { color: "var(--accent)", tint: "rgba(23, 107, 100, 0.12)" };
 }
 
 function clearCelebrationPanel() {

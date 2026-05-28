@@ -25,10 +25,10 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(90deg, rgba(23, 107, 100, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(23, 107, 100, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 107, 100, 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(23, 107, 100, 0.028) 1px, transparent 1px),
     var(--bg);
-  background-size: 42px 42px;
+  background-size: 46px 46px;
   color: var(--ink);
 }
 
@@ -40,11 +40,13 @@ select {
 
 .online-panel {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(250, 248, 241, 0.9);
-  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(23, 107, 100, 0.05), rgba(250, 248, 241, 0.92)),
+    rgba(250, 248, 241, 0.94);
+  padding: 14px;
 }
 
 .game-setup-fields {
@@ -93,13 +95,14 @@ body[data-role="guest"] .game-setup-fields .button-row {
 }
 
 .large-menu-button {
-  min-height: 54px;
+  min-height: 56px;
   font-size: 16px;
+  font-weight: 950;
 }
 
 .small-button {
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 38px;
+  padding: 7px 10px;
   font-size: 12px;
 }
 
@@ -119,6 +122,10 @@ body[data-role="guest"] .game-setup-fields .button-row {
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  border: 1px solid rgba(23, 107, 100, 0.14);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 9px;
 }
 
 .online-profile span {
@@ -145,6 +152,7 @@ body[data-role="guest"] .game-setup-fields .button-row {
   color: var(--accent-strong);
   font-weight: 900;
   overflow: hidden;
+  box-shadow: 0 8px 18px rgba(23, 107, 100, 0.12);
 }
 
 .avatar img {
@@ -411,13 +419,14 @@ body[data-online="connected"] .online-panel {
 }
 
 button {
-  min-height: 42px;
+  min-height: 46px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
-  padding: 10px 14px;
+  padding: 11px 14px;
   cursor: pointer;
+  font-weight: 850;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -472,9 +481,9 @@ body[data-online="connected"] .app-shell {
   margin-bottom: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.94);
   padding: 10px;
-  box-shadow: 0 10px 28px rgba(45, 38, 21, 0.1);
+  box-shadow: 0 12px 34px rgba(45, 38, 21, 0.12);
 }
 
 .title-block {
@@ -482,8 +491,12 @@ body[data-online="connected"] .app-shell {
   text-align: center;
 }
 
+.title-block h1 {
+  white-space: nowrap;
+}
+
 .topbar-button {
-  min-height: 42px;
+  min-height: 46px;
   padding: 8px 10px;
   font-size: 14px;
   font-weight: 800;
@@ -510,6 +523,27 @@ body[data-online="connected"] .app-shell {
 
 body[data-phase="setup"] .panel-head {
   display: none;
+}
+
+body[data-phase="setup"] .topbar {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(23, 107, 100, 0.26);
+  background:
+    linear-gradient(135deg, rgba(23, 107, 100, 0.1), rgba(255, 255, 255, 0.96) 42%, rgba(199, 131, 45, 0.08)),
+    #fff;
+}
+
+body[data-phase="setup"] .topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent), #c7832d);
+}
+
+body[data-phase="setup"] h1 {
+  font-size: 24px;
 }
 
 .eyebrow,
@@ -577,15 +611,19 @@ body[data-phase="setup"] .board-area {
 }
 
 body[data-phase="setup"] .control-panel {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(23, 107, 100, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 241, 0.96)),
+    #fff;
   padding: 16px;
-  box-shadow: 0 10px 28px rgba(45, 38, 21, 0.11);
+  box-shadow: 0 18px 46px rgba(45, 38, 21, 0.14);
 }
 
 body[data-phase="setup"][data-online="connected"] .control-panel {
   border-color: rgba(23, 107, 100, 0.35);
-  background: rgba(255, 255, 255, 0.95);
+  background:
+    linear-gradient(180deg, rgba(23, 107, 100, 0.06), rgba(255, 255, 255, 0.97)),
+    #fff;
 }
 
 body[data-phase="setup"][data-online="connected"] .control-panel::before {
@@ -641,8 +679,9 @@ body[data-phase="setup"][data-role="guest"] .control-panel::before {
 .topic-box {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.96);
   padding: 10px 12px;
+  box-shadow: 0 10px 26px rgba(45, 38, 21, 0.08);
 }
 
 .readonly-preview {
@@ -669,7 +708,8 @@ body[data-phase="setup"][data-role="guest"] .control-panel::before {
   border: 2px solid var(--ink);
   border-radius: 2px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 40px rgba(45, 38, 21, 0.12);
 }
 
 .tier-row {
@@ -919,19 +959,20 @@ button:focus-visible {
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 .button-row button {
   width: 100%;
   min-width: 0;
+  min-height: 50px;
   font-weight: 900;
 }
 
 .rank-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .rank-button {
@@ -946,15 +987,85 @@ button:focus-visible {
   transform: translateY(-1px);
 }
 
+.phase-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 107, 100, 0.18);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(23, 107, 100, 0.055), rgba(255, 255, 255, 0.96)),
+    var(--panel);
+  padding: 14px;
+  box-shadow: 0 14px 34px rgba(45, 38, 21, 0.11);
+  animation: softRise 260ms ease both;
+}
+
+.phase-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: var(--accent);
+}
+
+.phase-card-head {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.phase-card-head span,
+.phase-card-meta {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.phase-card-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.phase-card-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.phase-card-body {
+  display: grid;
+  gap: 12px;
+}
+
+.phase-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.phase-card-actions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.phase-card-meta {
+  text-align: right;
+}
+
 .play-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .play-status {
-  min-height: 48px;
+  min-height: 50px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.9);
@@ -966,11 +1077,12 @@ button:focus-visible {
 
 .play-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .play-actions button {
-  min-width: 96px;
+  min-width: 104px;
+  min-height: 50px;
   font-weight: 900;
 }
 
@@ -984,6 +1096,9 @@ button:focus-visible {
 }
 
 .operation-status {
+  position: sticky;
+  top: 8px;
+  z-index: 3;
   display: grid;
   gap: 5px;
   border: 1px solid rgba(23, 107, 100, 0.18);
@@ -991,8 +1106,8 @@ button:focus-visible {
   background:
     linear-gradient(90deg, rgba(23, 107, 100, 0.1), rgba(250, 248, 241, 0.84)),
     #fff;
-  padding: 10px 12px;
-  box-shadow: 0 10px 24px rgba(45, 38, 21, 0.08);
+  padding: 11px 12px;
+  box-shadow: 0 12px 28px rgba(45, 38, 21, 0.11);
 }
 
 .operation-status span {
@@ -1036,6 +1151,9 @@ button:focus-visible {
 
 .round-intro-card {
   position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
   width: min(460px, 88vw);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1046,8 +1164,6 @@ button:focus-visible {
   color: var(--accent-strong);
   padding: 34px 22px;
   text-align: center;
-  font-size: 34px;
-  font-weight: 950;
   line-height: 1.25;
   box-shadow: var(--shadow);
   animation: cardPop 520ms cubic-bezier(.2, .9, .25, 1.2) both;
@@ -1059,6 +1175,33 @@ button:focus-visible {
   inset: 0 0 auto;
   height: 7px;
   background: var(--accent);
+}
+
+.round-intro-eyebrow {
+  border-radius: 999px;
+  background: rgba(23, 107, 100, 0.1);
+  color: var(--accent-strong);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.round-intro-card strong {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.round-intro-card em {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--accent-strong);
+  font-size: 34px;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1.2;
 }
 
 .setter-prompt {
@@ -1178,7 +1321,7 @@ button:focus-visible {
 }
 
 .game-modal {
-  width: min(420px, 100%);
+  width: min(430px, 100%);
   max-height: calc(100vh - var(--top-exclusion-height) - 36px);
   overflow: auto;
   border: 1px solid var(--line);
@@ -1191,24 +1334,32 @@ button:focus-visible {
 .game-modal h3 {
   margin: 0;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--accent);
+  background:
+    linear-gradient(180deg, var(--accent), var(--accent-strong));
   color: #fff;
-  padding: 12px 16px;
+  padding: 14px 16px;
   text-align: center;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.25;
 }
 
 .game-modal-body {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   padding: 16px;
 }
 
 .game-modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
   padding: 0 16px 16px;
+}
+
+.game-modal-actions button {
+  min-height: 50px;
+  font-weight: 950;
 }
 
 .game-modal-actions button:only-child {
@@ -1320,6 +1471,15 @@ button:focus-visible {
   margin: 0;
 }
 
+.word-notice-eyebrow {
+  border-radius: 999px;
+  background: rgba(23, 107, 100, 0.1);
+  color: var(--accent-strong);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
 .announced-word {
   display: inline-grid;
   place-items: center;
@@ -1418,10 +1578,8 @@ button:focus-visible {
 }
 
 .word-input-overlay .game-modal h3 {
-  background:
-    linear-gradient(180deg, rgba(23, 107, 100, 0.95), var(--accent-strong));
   padding: 14px 16px;
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .word-input-form {
@@ -1527,8 +1685,19 @@ button:focus-visible {
 }
 
 .result-panel {
+  --result-rank-color: var(--accent);
+  --result-rank-tint: rgba(23, 107, 100, 0.12);
+  position: relative;
   display: grid;
   gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-left: 7px solid var(--result-rank-color);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, var(--result-rank-tint), rgba(255, 255, 255, 0.98) 42%),
+    #fff;
+  padding: 14px;
   text-align: center;
   animation: softRise 280ms ease both;
   color: var(--ink);
@@ -1548,6 +1717,7 @@ button:focus-visible {
   border-radius: 50%;
   font-size: 24px;
   font-weight: 950;
+  background: #fff;
   animation: stampPop 480ms cubic-bezier(.2, .9, .25, 1.2) both;
 }
 
@@ -1582,6 +1752,7 @@ button:focus-visible {
   color: #fff;
   font-size: 28px;
   font-weight: 950;
+  box-shadow: 0 8px 18px rgba(45, 38, 21, 0.12);
 }
 
 .result-compare-card.word-card {
@@ -1601,8 +1772,8 @@ button:focus-visible {
 }
 
 .result-compare-card.matched {
-  border-color: rgba(36, 115, 66, 0.34);
-  box-shadow: inset 0 0 0 2px rgba(36, 115, 66, 0.12);
+  border-color: var(--result-rank-color);
+  box-shadow: inset 0 0 0 2px var(--result-rank-tint);
 }
 
 .result-compare-card.missed {
@@ -1877,6 +2048,10 @@ button:focus-visible {
     font-size: 18px;
   }
 
+  body[data-phase="setup"] h1 {
+    font-size: 20px;
+  }
+
   .score-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
@@ -1954,6 +2129,7 @@ button:focus-visible {
   .play-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
 
   .play-actions button {
@@ -1979,8 +2155,28 @@ button:focus-visible {
   }
 
   .round-intro-card {
-    font-size: 26px;
     padding: 28px 18px;
+  }
+
+  .round-intro-card strong {
+    font-size: 24px;
+  }
+
+  .round-intro-card em {
+    font-size: 30px;
+  }
+
+  .phase-card {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .phase-card-head h3 {
+    font-size: 18px;
+  }
+
+  .phase-card-actions {
+    grid-template-columns: 1fr;
   }
 
   .setter-instruction {
