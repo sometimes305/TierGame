@@ -249,9 +249,6 @@ function renderPanel() {
     return;
   }
 
-  const operationStatus = createOperationStatus();
-  if (operationStatus) els.panelBody.append(operationStatus);
-
   if (state.phase === "gameStart") {
     els.panelBody.append(createIntroScreen("ゲーム開始", "最初のラウンドを準備しています"));
     return;
@@ -299,7 +296,7 @@ function renderPanel() {
         saveGame();
         render();
       });
-      const modal = createModal(alreadyAnswered ? "提出済み" : "単語入力", [createOperationStatus(), form].filter(Boolean), [
+      const modal = createModal(alreadyAnswered ? "提出済み" : "単語入力", [form], [
         button("戻る", () => {
           state.phase = "secret";
           render();
@@ -373,7 +370,7 @@ function renderPanel() {
       )
     ];
     if (canCurrentPlayerJudge()) {
-      children.push(createModal("ランク決定", [createOperationStatus(), answersBox(), createSelectedRankFocus(), createRankPicker()].filter(Boolean), [
+      children.push(createModal("ランク決定", [answersBox(), createSelectedRankFocus(), createRankPicker()], [
         button("キャンセル", () => {
           const playerName = getCurrentPlayerName();
           if (sendRemoteAction("cancelRankAnswer", { playerName })) return;
@@ -389,7 +386,7 @@ function renderPanel() {
   if (state.phase === "result") {
     const result = state.lastResult;
     els.panelBody.append(
-      createModal("回答結果", [createOperationStatus(), resultPanel(result)].filter(Boolean), [
+      createModal("回答結果", [resultPanel(result)], [
         button("次へ", nextRound, "primary")
       ])
     );
@@ -398,7 +395,7 @@ function renderPanel() {
 
   if (state.phase === "clear") {
     els.panelBody.append(
-      createModal("CLEAR!", [createOperationStatus(), clearCelebrationPanel()].filter(Boolean), [
+      createModal("CLEAR!", [clearCelebrationPanel()], [
         button("もう一度遊ぶ", resetGame, "primary")
       ])
     );
@@ -857,65 +854,6 @@ function createWaitingPanel(text) {
     <p>出題が終わると単語が発表されます。</p>
   `;
   return panel;
-}
-
-function createOperationStatus() {
-  const info = getOperationStatus();
-  if (!info) return null;
-  const box = document.createElement("div");
-  box.className = `operation-status ${info.tone || ""}`;
-  box.innerHTML = `
-    <span>${escapeHtml(info.label)}</span>
-    <strong>${escapeHtml(info.title)}</strong>
-    <p>${escapeHtml(info.detail)}</p>
-  `;
-  return box;
-}
-
-function getOperationStatus() {
-  const setter = getRoundTopicSetterName() || "出題者";
-  const activeAnswerer = getActiveAnswererName();
-  const playerName = getCurrentPlayerName();
-  const isSetter = canCurrentPlayerViewSecret();
-  const isJudge = canCurrentPlayerJudge();
-
-  if (state.phase === "gameStart") {
-    return { label: "開始", title: "ゲーム開始", detail: "最初の出題者を発表します。" };
-  }
-  if (state.phase === "roundIntro") {
-    return { label: "出題者発表", title: `今回の出題者は ${setter}`, detail: "この後、出題者だけに秘密ランクが表示されます。" };
-  }
-  if (state.phase === "secret") {
-    return isSetter
-      ? { label: "あなたの番", title: "秘密ランクを見て単語を考える", detail: "入力するを押すと単語入力に進みます。", tone: "active" }
-      : { label: "待ち", title: `${setter}が出題を考えています`, detail: "単語が発表されるまで少し待ちます。" };
-  }
-  if (state.phase === "answer") {
-    return isSetter
-      ? { label: "あなたの番", title: "単語を入力してください", detail: "秘密ランクにちょうど合いそうな単語を入れます。", tone: "active" }
-      : { label: "待ち", title: `${setter}が出題を考えています`, detail: "入力が終わると全員に単語が発表されます。" };
-  }
-  if (state.phase === "discussion") {
-    if (activeAnswerer) {
-      return { label: "判定中", title: `${activeAnswerer}がランクを選んでいます`, detail: "選択が終わるまで相談を見守ります。" };
-    }
-    const canAnswer = isRoundAnswererName(playerName);
-    return canAnswer
-      ? { label: "相談中", title: "ランクを相談して、回答する人を決める", detail: "回答するを押した人がランクを選びます。", tone: "active" }
-      : { label: "相談中", title: "回答者がランクを相談中", detail: "出題者は推理を見守ります。" };
-  }
-  if (state.phase === "judgement") {
-    return isJudge
-      ? { label: "あなたの番", title: state.selectedRank ? `${state.selectedRank}を選択中` : "ランクを選択してください", detail: "選んだランクが秘密ランクと一致すると成功です。", tone: "active" }
-      : { label: "待ち", title: `${activeAnswerer || "回答者"}がランクを選んでいます`, detail: "決定すると結果発表に進みます。" };
-  }
-  if (state.phase === "result") {
-    return { label: "結果", title: "結果を確認中", detail: "単語、秘密ランク、選ばれたランクを見比べます。" };
-  }
-  if (state.phase === "clear") {
-    return { label: "クリア", title: "連続正解目標を達成", detail: "もう一度遊ぶとルール設定に戻ります。", tone: "active" };
-  }
-  return null;
 }
 
 function goAnswerPhase(playerName) {
