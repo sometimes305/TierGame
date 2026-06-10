@@ -22,26 +22,16 @@ const AUTO_SETUPS = [
   { topic: "モテそうな職業", startWord: "美容師", initialRank: "B" },
   { topic: "贅沢なもの", startWord: "ハーゲンダッツ", initialRank: "B" },
   { topic: "強そうな犬の名前", startWord: "タロウ", initialRank: "C" },
-  { topic: "出身だと言われたら強そうだと感じる都道府県", startWord: "神奈川", initialRank: "A" },
   { topic: "キッザニアにあったらやりたい職業", startWord: "清掃員", initialRank: "C" },
   { topic: "好きな人が弾いていたらキュンとくる楽器", startWord: "ベース", initialRank: "B" },
   { topic: "蛇口をひねって出てきたら嬉しい飲み物", startWord: "コーラ", initialRank: "A" },
-  { topic: "もらったらテンションの上がるご当地のお土産", startWord: "白い恋人", initialRank: "B" },
   { topic: "かっこいいと思う英単語", startWord: "Happy", initialRank: "C" },
   { topic: "ゾンビに襲われても安心だと思う建物", startWord: "コンビニ", initialRank: "B" },
-  { topic: "マラソンの完走直後に持ってきてくれたら嬉しい食べ物", startWord: "おでん", initialRank: "C" },
-  { topic: "3倍の大きさになっても良いと思えるペット", startWord: "へび", initialRank: "C" },
   { topic: "冷蔵庫に常に入っていてほしい物", startWord: "たまご", initialRank: "B" },
   { topic: "懐かしい学校給食の人気メニュー", startWord: "揚げパン", initialRank: "A" },
-  { topic: "同僚が机に差し入れを置いてくれた！ これは嬉しいと思うもの", startWord: "コーヒー", initialRank: "B" },
-  { topic: "目覚ましがこの音だったら気持ちよく起きられると思う音", startWord: "鳥のさえずり", initialRank: "B" },
-  { topic: "お菓子の世界があったら役職が高いと思うお菓子", startWord: "フィナンシェ", initialRank: "B" },
   { topic: "必殺技だったら強そうな、仕事で使う用語", startWord: "アジャイル", initialRank: "B" },
-  { topic: "「この後輩できるな」と思う、後輩が買ってきたおつまみ・お菓子", startWord: "うまい棒", initialRank: "C" },
-  { topic: "王子様が動物に乗ってやってきた！ 一番ときめく動物", startWord: "牛", initialRank: "C" },
   { topic: "蛙化する瞬間", startWord: "食べ方が汚い", initialRank: "A" },
-  { topic: "バターとシナジーがあると思うもの", startWord: "食パン", initialRank: "B" },
-  { topic: "授業中に起こったらテンションの上がる瞬間", startWord: "好きな人と目が合う", initialRank: "A" }
+  { topic: "バターとシナジーがあると思うもの", startWord: "食パン", initialRank: "B" }
 ];
 const PHASE_LABELS = {
   setup: "ルール設定",
