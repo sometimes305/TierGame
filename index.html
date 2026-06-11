@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>みんなでTier表ゲーム</title>
-    <link rel="stylesheet" href="style.css?v=20260611-start-buttons" />
+    <link rel="stylesheet" href="style.css?v=20260611-room-id" />
     <script src="https://cdn.gravity.place/fe/sdk/index-1.0.2.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   </head>
@@ -210,7 +210,7 @@
               <input id="usernameJoin" maxlength="12" placeholder="名前を入力" />
             </label>
             <div class="join-row">
-              <input id="joinRoomInput" maxlength="32" placeholder="ルームID" />
+              <input id="joinRoomInput" maxlength="80" placeholder="ルームID" />
               <button type="button" id="joinRoomButton">参加</button>
             </div>
             <div class="room-list-title">公開ルーム</div>
@@ -228,7 +228,7 @@
       </form>
     </template>
 
-    <script src="app.js?v=20260611-start-buttons"></script>
-    <script src="online.js?v=20260611-start-buttons"></script>
+    <script src="app.js?v=20260611-room-id"></script>
+    <script src="online.js?v=20260611-room-id"></script>
   </body>
 </html>

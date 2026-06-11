@@ -357,6 +357,12 @@ body:not([data-phase="setup"]) #exitRoomButton {
   white-space: nowrap;
 }
 
+#activeRoomId {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
 .chat-panel {
   position: fixed;
   left: 50%;

@@ -155,7 +155,7 @@
       if (!this.online) {
         message = "";
       } else {
-        message = `${this.host ? "ホスト" : "ゲスト"} / 部屋ID: ${String(this.roomId || "----").slice(-5)}`;
+        message = `${this.host ? "ホスト" : "ゲスト"} / 部屋ID: ${String(this.roomId || "----")}`;
       }
       if (el) el.textContent = message;
       if (badge) badge.textContent = message;
@@ -168,7 +168,11 @@
       const panel = document.querySelector("#roomPanel");
       const roomId = document.querySelector("#activeRoomId");
       if (panel) panel.classList.toggle("hidden", !this.online);
-      if (roomId) roomId.textContent = this.roomId ? String(this.roomId).slice(-5) : "未入室";
+      if (roomId) {
+        const displayRoomId = this.roomId ? String(this.roomId) : "未入室";
+        roomId.textContent = displayRoomId;
+        roomId.title = displayRoomId;
+      }
       this.renderParticipants();
     },
 
@@ -597,7 +601,7 @@
     async findFullRoomId(shortId) {
       const rooms = await this.getPublicRooms();
       const found = rooms.find((room) => String(room.room_id || room.roomId || room.id || "").endsWith(shortId));
-      if (!found) throw new Error("部屋が見つかりません");
+      if (!found) throw new Error("部屋が見つかりません。非公開部屋の場合はホスト画面のフルIDを入力してください");
       return String(found.room_id || found.roomId || found.id || "");
     },
 
