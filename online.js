@@ -96,17 +96,33 @@
     },
 
     showOnlineScreen(name) {
-      document.querySelectorAll(".online-screen[data-online-screen]").forEach((screen) => {
-        screen.classList.toggle("hidden", screen.dataset.onlineScreen !== name);
+      const screens = [...document.querySelectorAll(".online-screen[data-online-screen]")];
+      if (!screens.length) {
+        document.body.classList.remove("hidden");
+        document.body.dataset.onlineScreen = "home";
+        return;
+      }
+      const target = screens.find((screen) => screen.dataset.onlineScreen === name) ||
+        screens.find((screen) => screen.dataset.onlineScreen === "home") ||
+        screens[0];
+      screens.forEach((screen) => {
+        screen.classList.toggle("hidden", screen !== target);
       });
       document.body.classList.remove("hidden");
-      document.body.dataset.onlineScreen = name;
+      document.body.dataset.onlineScreen = target.dataset.onlineScreen || "home";
       this.statusMessage = "";
       this.refreshStatus();
     },
 
     syncOnlineScreenState() {
-      const visible = document.querySelector(".online-screen[data-online-screen]:not(.hidden)");
+      const screens = [...document.querySelectorAll(".online-screen[data-online-screen]")];
+      let visible = screens.find((screen) => !screen.classList.contains("hidden"));
+      if (!visible && screens.length) {
+        visible = screens.find((screen) => screen.dataset.onlineScreen === "home") || screens[0];
+        screens.forEach((screen) => {
+          screen.classList.toggle("hidden", screen !== visible);
+        });
+      }
       document.body.classList.remove("hidden");
       document.body.dataset.onlineScreen = visible ? visible.dataset.onlineScreen : "home";
     },

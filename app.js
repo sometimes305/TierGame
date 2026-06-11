@@ -254,6 +254,7 @@ function renderPanel() {
     fragment.querySelector(`[name="topicMode"][value="${state.topicMode || "auto"}"]`).checked = true;
     applySetupRoleUi(fragment);
     bindSetupFormBehavior(fragment);
+    normalizeSetupOnlineScreens(fragment);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -1723,6 +1724,22 @@ function applySetupRoleUi(root) {
     startButton.textContent = "ホストの開始待ち";
   }
   controls.forEach((control) => (control.disabled = true));
+}
+
+function normalizeSetupOnlineScreens(root) {
+  if (isRoomConnected()) return;
+  const screens = [...root.querySelectorAll(".online-screen[data-online-screen]")];
+  if (!screens.length) return;
+  const current = document.body.dataset.onlineScreen;
+  const targetName = screens.some((screen) => screen.dataset.onlineScreen === current) ? current : "home";
+  let target = screens.find((screen) => screen.dataset.onlineScreen === targetName);
+  if (!target) target = screens.find((screen) => screen.dataset.onlineScreen === "home") || screens[0];
+  screens.forEach((screen) => {
+    screen.classList.toggle("hidden", screen !== target);
+  });
+  document.body.classList.remove("hidden");
+  document.body.dataset.online = "lobby";
+  document.body.dataset.onlineScreen = target.dataset.onlineScreen || "home";
 }
 
 function canEditSetupControls() {
